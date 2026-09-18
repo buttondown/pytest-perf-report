@@ -36,6 +36,7 @@ import builtins
 import functools
 import gc
 import io
+import pathlib
 import socket
 import time
 from time import perf_counter
@@ -82,9 +83,16 @@ class SleepProbe(Probe):
 
 
 class FileOpenProbe(Probe):
-    """Wraps both ``builtins.open`` and ``io.open``: they start out as the
-    same function, but they are separate bindings, and pathlib goes through
-    ``io.open`` — patching only builtins would miss Path.read_text() et al."""
+    """Wraps ``builtins.open``, ``io.open``, and — on Python 3.10 — pathlib's
+    accessor. The first two start out as the same function but are separate
+    bindings, and pathlib goes through ``io.open``, so patching only builtins
+    would miss Path.read_text() et al. Python 3.10 resolves ``io.open`` once,
+    at pathlib import time, onto ``pathlib._normal_accessor``; rebinding
+    ``io.open`` afterwards never reaches it. That copy is patched on the
+    accessor *instance*, never its class: a plain function set as a class
+    attribute is a descriptor and would arrive bound, eating the path
+    argument. Python 3.11 dropped the accessor and calls ``io.open``
+    directly."""
 
     def install(self) -> None:
         self._orig_builtins = builtins.open
@@ -98,10 +106,18 @@ class FileOpenProbe(Probe):
         self._wrapper = open_
         builtins.open = open_
         io.open = open_
+        accessor = getattr(pathlib, "_normal_accessor", None)
+        if getattr(accessor, "open", None) is self._orig_io:
+            self._accessor = accessor
+            accessor.open = open_
+        else:
+            self._accessor = None
 
     def uninstall(self) -> None:
         _restore(builtins, "open", self._wrapper, self._orig_builtins)
         _restore(io, "open", self._wrapper, self._orig_io)
+        if self._accessor is not None:
+            _restore(self._accessor, "open", self._wrapper, self._orig_io)
 
 
 class GcProbe(Probe):
