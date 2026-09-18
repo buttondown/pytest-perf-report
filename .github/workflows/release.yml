@@ -1,0 +1,27 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+      - name: Check the tag matches the packaged version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version="$(python3 -c 'import tomllib,pathlib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_bytes().decode())["project"]["version"])')"
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "${version}" != "${tag}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match pyproject.toml version ${version}."
+            exit 1
+          fi
+      - run: uv build
+      - uses: pypa/gh-action-pypi-publish@release/v1

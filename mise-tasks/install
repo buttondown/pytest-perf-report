@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+#MISE description="Install dependencies (locked)"
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+uv sync --frozen

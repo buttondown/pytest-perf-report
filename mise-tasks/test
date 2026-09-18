@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="Run pytest-perf-report's own test suite"
+#MISE sources=["src/**/*.py", "tests/**/*.py", "pyproject.toml"]
+set -euo pipefail
+
+uv run pytest "$@"

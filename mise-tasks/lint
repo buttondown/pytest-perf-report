@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+#MISE description="Check linting and formatting (CI gate; use :format to fix)"
+#MISE sources=["src/**/*.py", "tests/**/*.py", "pyproject.toml"]
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+uv run --frozen ruff check .
+uv run --frozen ruff format --check .

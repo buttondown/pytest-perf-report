@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+      - run: uv run --frozen ruff check .
+      - run: uv run --frozen ruff format --check .
+
+  test:
+    name: test (py${{ matrix.python-version }}, ${{ matrix.pytest }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        pytest: ["locked"]
+        include:
+          # The lockfile pins the newest pytest; these legs cover the oldest
+          # supported major and the one in between.
+          - python-version: "3.10"
+            pytest: "pytest>=7,<8"
+          - python-version: "3.12"
+            pytest: "pytest>=8,<9"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: uv sync --frozen
+      - if: matrix.pytest != 'locked'
+        run: uv pip install "${{ matrix.pytest }}"
+      - run: uv run --no-sync pytest
