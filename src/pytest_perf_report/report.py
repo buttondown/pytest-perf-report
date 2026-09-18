@@ -10,7 +10,12 @@ import datetime
 import html
 from typing import Any
 
-from pytest_perf_report.analyze import N_PLUS_ONE_THRESHOLD, fmt_bytes, fmt_seconds
+from pytest_perf_report.analyze import (
+    N_PLUS_ONE_THRESHOLD,
+    fmt_bytes,
+    fmt_seconds,
+    split_nodeid,
+)
 
 esc = html.escape
 
@@ -36,10 +41,29 @@ body { margin: 0 auto; max-width: 1080px; padding: 32px; background: var(--bg); 
   font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
 h1 { font-size: 24px; margin: 0 0 4px; font-weight: 650; }
 h2 { font-size: 16px; margin: 36px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+h2.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 code { background: var(--chip); padding: 1.5px 6px; border-radius: 5px; font-size: 12.5px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+/* Test labels never wrap. Under pressure the dim path gives way first — the
+   test name is never clipped — and the tooltip holds the whole nodeid. */
+td.test { white-space: nowrap; }
+code.tid { display: inline-flex; max-width: 52ch; vertical-align: bottom; white-space: nowrap; }
+.rowtoggle { background: none; border: 1px solid var(--border); border-radius: 999px; color: var(--muted);
+  font: inherit; font-size: 12px; font-weight: 400; padding: 3px 11px; cursor: pointer; }
+.rowtoggle:hover { color: var(--fg); }
+.rowtoggle[aria-pressed="true"] { color: var(--fg); border-color: var(--accent); }
+tr.fam { cursor: pointer; }
+tr.fam .caret { display: inline-block; width: 10px; color: var(--faint); }
+tr.case > td:first-child { padding-left: 38px; }
+table:not(.ungrouped) tr.case .tid { display: none; }
+code.tid .tid-path { color: var(--faint); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+code.tid .tid-name { flex: none; }
+.param { display: inline-block; max-width: 30ch; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; vertical-align: bottom; color: var(--muted); background: var(--panel2);
+  padding: 1.5px 6px; border-radius: 5px; font-size: 12px; margin-left: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .sub, .note, .footer { color: var(--muted); font-size: 12.5px; }
 .subhead { color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase;
   letter-spacing: 0.04em; margin: 20px 0 10px; }
@@ -135,22 +159,87 @@ if (tabs.length) selectTab(tabs[0].dataset.tab);
 """
 
 SORT_JS = """
+function sortTable(table, idx, dir) {
+  var tbody = table.tBodies[0];
+  var rows = Array.prototype.slice.call(tbody.rows);
+  function value(row) {
+    var cell = row.cells[idx];
+    return (cell && parseFloat(cell.dataset.v || cell.textContent)) || 0;
+  }
+  function cmp(a, b) { return dir === 'desc' ? value(b) - value(a) : value(a) - value(b); }
+  table.dataset.sortIdx = idx;
+  table.dataset.sortDir = dir;
+  // Grouped: order the family/solo rows, then re-attach each family's cases
+  // under it. Ungrouped: one flat order over the cases, families parked last.
+  var grouped = !table.classList.contains('ungrouped');
+  var heads = rows.filter(function (r) {
+    return grouped ? !r.classList.contains('case') : !r.classList.contains('fam');
+  });
+  var cases = {};
+  rows.forEach(function (r) {
+    if (grouped && r.classList.contains('case')) {
+      (cases[r.dataset.fam] = cases[r.dataset.fam] || []).push(r);
+    }
+  });
+  heads.sort(cmp);
+  heads.forEach(function (head) {
+    tbody.appendChild(head);
+    var kids = cases[head.dataset.fam];
+    if (kids) { kids.sort(cmp); kids.forEach(function (k) { tbody.appendChild(k); }); }
+  });
+  if (!grouped) {
+    rows.forEach(function (r) { if (r.classList.contains('fam')) tbody.appendChild(r); });
+  }
+}
 document.querySelectorAll('th.sortable').forEach(function (th) {
   th.addEventListener('click', function () {
-    var table = th.closest('table'), tbody = table.tBodies[0];
-    var idx = Array.prototype.indexOf.call(th.parentNode.children, th);
-    var rows = Array.prototype.slice.call(tbody.rows);
+    var table = th.closest('table');
     var dir = th.dataset.dir === 'desc' ? 'asc' : 'desc';
     table.querySelectorAll('th.sortable').forEach(function (h) { delete h.dataset.dir; });
     th.dataset.dir = dir;
-    rows.sort(function (a, b) {
-      var av = parseFloat(a.cells[idx].dataset.v || a.cells[idx].textContent) || 0;
-      var bv = parseFloat(b.cells[idx].dataset.v || b.cells[idx].textContent) || 0;
-      return dir === 'desc' ? bv - av : av - bv;
-    });
-    rows.forEach(function (r) { tbody.appendChild(r); });
+    sortTable(table, Array.prototype.indexOf.call(th.parentNode.children, th), dir);
   });
 });
+"""
+
+# Parametrized cases collapse into their family row by default; the toggle
+# flips the whole table between the two views, a family row opens just itself.
+GROUP_JS = """
+(function () {
+  var table = document.getElementById('tests-table');
+  if (!table) return;
+  var toggle = document.getElementById('group-toggle');
+  var rows = Array.prototype.slice.call(table.tBodies[0].rows);
+  var families = {};
+  rows.forEach(function (r) { if (r.classList.contains('fam')) families[r.dataset.fam] = r; });
+  function apply() {
+    var grouped = !table.classList.contains('ungrouped');
+    rows.forEach(function (r) {
+      if (r.classList.contains('fam')) {
+        r.hidden = !grouped;
+      } else if (r.classList.contains('case')) {
+        var family = families[r.dataset.fam];
+        r.hidden = grouped && !family.classList.contains('open');
+      }
+    });
+  }
+  Object.keys(families).forEach(function (key) {
+    var family = families[key];
+    family.addEventListener('click', function () {
+      family.classList.toggle('open');
+      family.querySelector('.caret').textContent =
+        family.classList.contains('open') ? '▾' : '▸';
+      apply();
+    });
+  });
+  toggle.addEventListener('click', function () {
+    var grouped = !table.classList.toggle('ungrouped');
+    toggle.setAttribute('aria-pressed', String(grouped));
+    sortTable(table, Number(table.dataset.sortIdx || 1), table.dataset.sortDir || 'desc');
+    apply();
+  });
+  apply();
+})();
 """
 
 STACK_COLORS = {
@@ -200,6 +289,38 @@ def _num(raw: Any, formatted: str) -> str:
 def _bar(fraction: float, max_px: int = 120) -> str:
     width = max(2, int(round(min(1.0, fraction) * max_px)))
     return f'<span class="bar" style="width:{width}px"></span>'
+
+
+# How much of the path a label keeps before it starts dropping directories.
+PATH_LIMIT = 30
+
+
+def _elide_path(prefix: str) -> str:
+    """Drop leading directories until the path fits, so a label stays on one
+    line. The file (and class) survive; the whole nodeid is in the tooltip."""
+    if len(prefix) <= PATH_LIMIT:
+        return prefix
+    parts = prefix.split("/")
+    kept = parts[-1]
+    for part in reversed(parts[:-1]):
+        if len(part) + len(kept) + 1 > PATH_LIMIT:
+            break
+        kept = f"{part}/{kept}"
+    return "…/" + kept
+
+
+def _test_label(nodeid: str) -> str:
+    """A nodeid as a dim path, the test name, then the parametrize id in its
+    own chip — so names line up and a long id never buries the name."""
+    prefix, name, param = split_nodeid(nodeid)
+    label = (
+        f'<code class="tid" title="{esc(nodeid)}">'
+        f'<span class="tid-path">{esc(_elide_path(prefix))}</span>'
+        f'<span class="tid-name">{esc(name)}</span></code>'
+    )
+    if param:
+        label += f'<span class="param" title="{esc(param)}">{esc(param)}</span>'
+    return label
 
 
 def _outcome_pill(outcome: str) -> str:
@@ -360,15 +481,20 @@ def _histogram(walls: list[float]) -> str:
     return f'<div class="barchart">{rows}</div>'
 
 
-def _table(headers: list[tuple[str, bool]], rows: list[str], note: str = "") -> str:
+def _table(
+    headers: list[tuple[str, bool]],
+    rows: list[str],
+    note: str = "",
+    attrs: str = "",
+) -> str:
     head = "".join(
         f'<th class="num sortable">{esc(h)}</th>' if numeric else f"<th>{esc(h)}</th>"
         for h, numeric in headers
     )
     note_html = f'<div class="note" style="margin:6px 0 0">{note}</div>' if note else ""
     return (
-        f"<table><thead><tr>{head}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
-        + note_html
+        f"<table{attrs}><thead><tr>{head}</tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table>" + note_html
     )
 
 
@@ -428,7 +554,7 @@ def _baseline_section(delta: dict[str, Any]) -> str:
         )
     if delta["test_regressions"]:
         reg_rows = [
-            f"<tr><td><code>{esc(r['nodeid'])}</code></td>"
+            f'<tr><td class="test">{_test_label(r["nodeid"])}</td>'
             + _num(r["before"], fmt_seconds(r["before"]))
             + _num(r["after"], fmt_seconds(r["after"]))
             + _delta_cell(
@@ -629,7 +755,7 @@ def render(
     if failures:
         items = "".join(
             f"<details><summary>{_outcome_pill(t['outcome'])} "
-            f"<code>{esc(t['nodeid'])}</code> · {fmt_seconds(t['wall_s'])}</summary>"
+            f"{_test_label(t['nodeid'])} · {fmt_seconds(t['wall_s'])}</summary>"
             f"<pre>{esc(t.get('failure') or '(no captured output)')}</pre></details>"
             for t in failures[:50]
         )
@@ -643,7 +769,6 @@ def render(
     # --- slowest / fastest ---
     by_wall_asc = sorted(per_test, key=lambda t: t["wall_s"])
     sorted_walls = [t["wall_s"] for t in by_wall_asc]
-    max_wall = (sorted_walls[-1] if sorted_walls else 1) or 1
     # Each process's first test gets billed for all session-scoped fixture
     # setup; flag it so it doesn't read as a genuinely slow test.
     first_test_nodeids = {
@@ -652,7 +777,25 @@ def render(
         if lane.get("first_test_nodeid")
     }
 
-    def test_row(t: dict[str, Any]) -> str:
+    # Every row carries the same columns, so a family row and a case row stay
+    # comparable when either view is sorted.
+    TEST_COLUMNS = [
+        ("wall_s", True),
+        ("setup_s", True),
+        ("call_s", True),
+        ("cpu_s", True),
+        ("db_queries", False),
+        ("db_time_s", True),
+        ("http_calls", False),
+    ]
+
+    def test_cells(row: dict[str, Any]) -> str:
+        return "".join(
+            _num(row[key], fmt_seconds(row[key]) if is_time else f"{row[key]:,}")
+            for key, is_time in TEST_COLUMNS
+        )
+
+    def test_row(t: dict[str, Any], family: int | None = None) -> str:
         session_pill = ""
         if t["nodeid"] in first_test_nodeids and t["setup_s"] > 0.5 * (
             t["wall_s"] or 1
@@ -662,17 +805,24 @@ def render(
                 "pytest charges all session-scoped fixture setup (DB creation, "
                 "cache warming) to this test's setup phase.\">includes session setup</span>"
             )
+        attrs = f' class="case" data-fam="{family}"' if family is not None else ""
         return (
-            f"<tr><td>{_bar(t['wall_s'] / max_wall)} <code>{esc(t['nodeid'])}</code> "
+            f'<tr{attrs}><td class="test">'
+            f"{_test_label(t['nodeid'])} "
             f"{_outcome_pill(t['outcome']) if t['outcome'] != 'passed' else ''}"
-            f"{session_pill}</td>"
-            + _num(t["wall_s"], fmt_seconds(t["wall_s"]))
-            + _num(t["setup_s"], fmt_seconds(t["setup_s"]))
-            + _num(t["call_s"], fmt_seconds(t["call_s"]))
-            + _num(t["cpu_s"], fmt_seconds(t["cpu_s"]))
-            + _num(t["db_queries"], f"{t['db_queries']:,}")
-            + _num(t["db_time_s"], fmt_seconds(t["db_time_s"]))
-            + _num(t["http_calls"], f"{t['http_calls']:,}")
+            f"{session_pill}</td>" + test_cells(t) + "</tr>"
+        )
+
+    def family_row(family: int, nodeid: str, cases: list[dict[str, Any]]) -> str:
+        totals = {key: sum(c[key] for c in cases) for key, _ in TEST_COLUMNS}
+        failed = sum(1 for c in cases if c["outcome"] in ("failed", "error"))
+        pills = f' <span class="pill neutral">{len(cases)} cases</span>' + (
+            f' <span class="pill bad">{failed} failed</span>' if failed else ""
+        )
+        return (
+            f'<tr class="fam" data-fam="{family}"><td class="test">'
+            f'<span class="caret">▸</span> {_test_label(nodeid)}{pills}</td>'
+            + test_cells(totals)
             + "</tr>"
         )
 
@@ -689,18 +839,54 @@ def render(
     # One table, every test, slowest first (sortable by any column). Beyond
     # the cap the page gets unwieldy; the cut is announced, never silent.
     all_tests = by_wall_asc[::-1][:MAX_TEST_TABLE_ROWS]
+    # The cases of one parametrized test are one entry: a whole parametrized
+    # test is what a reader recognises, and 40 cases of it otherwise bury
+    # everything else in the table.
+    families: dict[str, list[dict[str, Any]]] = {}
+    for t in all_tests:
+        prefix, name, param = split_nodeid(t["nodeid"])
+        families.setdefault(prefix + name if param else t["nodeid"], []).append(t)
+    grouped = sorted(
+        families.items(),
+        key=lambda kv: sum(t["wall_s"] for t in kv[1]),
+        reverse=True,
+    )
+    test_rows = []
+    for family, (nodeid, cases) in enumerate(grouped):
+        if len(cases) == 1:
+            test_rows.append(test_row(cases[0]))
+            continue
+        test_rows.append(family_row(family, nodeid, cases))
+        test_rows.extend(
+            test_row(t, family)
+            for t in sorted(cases, key=lambda t: t["wall_s"], reverse=True)
+        )
+    parametrized = sum(1 for _, cases in grouped if len(cases) > 1)
     tests_note = (
         "All tests, slowest first. The fastest tests put a floor under per-test "
         "overhead — anything a slow test spends beyond its own work shows up "
         "against that baseline."
     )
+    if parametrized:
+        tests_note = (
+            f"{parametrized} parametrized test"
+            f"{'s are' if parametrized != 1 else ' is'} grouped: the row totals "
+            "every case, click it to open the cases, or ungroup the whole table "
+            "above. " + tests_note
+        )
     if len(by_wall_asc) > MAX_TEST_TABLE_ROWS:
         tests_note = (
             f"Showing the {MAX_TEST_TABLE_ROWS:,} slowest of {len(by_wall_asc):,} "
             f"tests (the rest are in --perf-report-json). " + tests_note
         )
+    tests_toggle = (
+        '<button class="rowtoggle" id="group-toggle" aria-pressed="true">'
+        "Group parametrized cases</button>"
+        if parametrized
+        else ""
+    )
     tests_table = _table(
-        test_headers, [test_row(t) for t in all_tests], note=tests_note
+        test_headers, test_rows, note=tests_note, attrs=' id="tests-table"'
     )
 
     # --- fixtures ---
@@ -1105,7 +1291,7 @@ def render(
 {_histogram(sorted_walls)}
 <div class="note" style="margin-top:14px">p50 {fmt_seconds(stats["p50"])} · p90 {fmt_seconds(stats["p90"])} · p99 {fmt_seconds(stats["p99"])} · mean {fmt_seconds(stats["mean"])}</div>
 {failures_html}
-<h2>Tests</h2>
+<h2 class="row">Tests{tests_toggle}</h2>
 {tests_table}
 """
     # (label, key, panel html) — a tab only exists when it has content.
@@ -1159,5 +1345,6 @@ def render(
 command: <code>{esc(command)}</code> · numeric column headers are click-to-sort
 · hover a headline card for what it means.</div>
 <script>{SORT_JS}</script>
+<script>{GROUP_JS}</script>
 <script>{TAB_JS}</script>
 </body></html>"""

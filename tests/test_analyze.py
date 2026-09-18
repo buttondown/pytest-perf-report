@@ -1,6 +1,12 @@
 from collections import Counter
 
-from pytest_perf_report.analyze import build_todos, compute, percentile
+from pytest_perf_report.analyze import (
+    _nodeid_short,
+    build_todos,
+    compute,
+    percentile,
+    split_nodeid,
+)
 
 
 def make_merged(**overrides):
@@ -194,3 +200,39 @@ def test_n_plus_one_todo():
     )
     todos = build_todos(merged, compute(merged))
     assert any("N+1" in t["title"] for t in todos)
+
+
+def test_split_nodeid():
+    assert split_nodeid("m.py::test_x") == ("m.py::", "test_x", "")
+    assert split_nodeid("a/m.py::C::test_x[case-1]") == (
+        "a/m.py::C::",
+        "test_x",
+        "case-1",
+    )
+    # Parametrize ids may contain the separators the nodeid itself uses.
+    assert split_nodeid("m.py::test_x[a::b[c]]") == ("m.py::", "test_x", "a::b[c]")
+    assert split_nodeid("test_x") == ("", "test_x", "")
+
+
+def test_nodeid_short_keeps_the_test_name():
+    nodeid = "a/very/long/path/to/plain/views/webhook--test.py::test_auto_tag[flagged-when-human-relabels]"
+    short = _nodeid_short(nodeid, 60)
+    assert len(short) <= 60
+    assert "test_auto_tag" in short
+    long_param = "m.py::test_x[" + "p" * 200 + "]"
+    short = _nodeid_short(long_param, 40)
+    assert len(short) <= 40
+    assert short.startswith("test_x[p")
+    assert _nodeid_short("m.py::test_x", 90) == "m.py::test_x"
+
+
+def test_gc_todo_needs_more_than_a_rounding_error():
+    # 4ms of GC in a small suite is noise, not a finding.
+    quiet = make_merged(gc_s=0.004)
+    assert not any(
+        "Garbage collection" in t["title"] for t in build_todos(quiet, compute(quiet))
+    )
+    loud = make_merged(gc_s=3.0)
+    assert any(
+        "Garbage collection" in t["title"] for t in build_todos(loud, compute(loud))
+    )

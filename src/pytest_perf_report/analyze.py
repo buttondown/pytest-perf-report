@@ -17,6 +17,10 @@ SEVERITY_RANK = {"high": 0, "medium": 1, "low": 2}
 # A SELECT shape repeating at least this often inside a single test is called
 # an N+1 suspect; report.py renders its table from the same constant.
 N_PLUS_ONE_THRESHOLD = 25
+# GC always costs something. It only earns a TODO when it is both a real slice
+# of CPU and enough wall time that reclaiming it is worth the work.
+GC_MIN_S = 1.0
+GC_CPU_SHARE = 0.02
 
 
 def percentile(sorted_values: list[float], q: float) -> float:
@@ -142,8 +146,35 @@ def compute(merged: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def split_nodeid(nodeid: str) -> tuple[str, str, str]:
+    """Split a nodeid into (path prefix, test name, parametrize id).
+
+    ``pkg/mod.py::Class::test_name[case]`` becomes
+    ``("pkg/mod.py::Class::", "test_name", "case")``; the id is ``""`` when
+    the test is not parametrized. Parametrize ids can themselves contain
+    ``::`` and brackets, so the id is read as everything between the first
+    ``[`` and the trailing ``]``.
+    """
+    base, param = nodeid, ""
+    if nodeid.endswith("]"):
+        start = nodeid.find("[")
+        if start != -1:
+            base, param = nodeid[:start], nodeid[start + 1 : -1]
+    prefix, sep, name = base.rpartition("::")
+    return prefix + sep, name or base, param
+
+
 def _nodeid_short(nodeid: str, limit: int = 90) -> str:
-    return nodeid if len(nodeid) <= limit else "…" + nodeid[-(limit - 1) :]
+    """Shorten a nodeid for prose. The test name survives every cut: the path
+    is dropped first, then the tail of the parametrize id."""
+    if len(nodeid) <= limit:
+        return nodeid
+    _, name, param = split_nodeid(nodeid)
+    if len(name) + len(param) + 2 <= limit - 1:
+        return "…" + nodeid[-(limit - 1) :]
+    if not param:
+        return name[: limit - 1] + "…"
+    return f"{name}[{param[: max(0, limit - len(name) - 3)]}…]"
 
 
 # Cost totals compared against a baseline run, as (stats key, label, formatter).
@@ -527,7 +558,7 @@ def build_todos(
             "can't, and put a reason + owner on the rest.",
         )
 
-    if stats["cpu_s"] > 0 and stats["gc_s"] > 0.02 * stats["cpu_s"]:
+    if stats["gc_s"] >= GC_MIN_S and stats["gc_s"] > GC_CPU_SHARE * stats["cpu_s"]:
         add(
             "low",
             f"Garbage collection burned {fmt_seconds(stats['gc_s'])} "
