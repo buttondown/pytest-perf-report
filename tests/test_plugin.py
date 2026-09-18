@@ -705,7 +705,33 @@ def test_report_tabs_and_single_tests_table(pytester):
     assert html.index("What to do about it") > html.index('class="tab-panel"')
     # Slowest/fastest merged into one all-tests table.
     assert "Slowest tests" not in html and "Fastest tests" not in html
-    assert "<h2>Tests</h2>" in html
+    assert '<h2 class="row">Tests' in html
     # Headline cards carry tooltips in a single grid.
     assert html.count('<div class="cards">') == 1
     assert 'title="End-to-end clock for the whole run' in html
+
+
+def test_parametrized_cases_group_into_one_family_row(pytester):
+    pytester.makepyfile(
+        """
+        import pytest
+
+        @pytest.mark.parametrize("case", ["one", "two", "three"])
+        def test_param(case): pass
+
+        def test_plain(): pass
+        """
+    )
+    pytester.runpytest("--perf-report=report.html").assert_outcomes(passed=4)
+    html = (pytester.path / "report.html").read_text()
+    # One family row totalling the three cases, and the three cases under it.
+    assert html.count('<tr class="fam" data-fam="0">') == 1
+    assert html.count('<tr class="case" data-fam="0">') == 3
+    assert '<span class="pill neutral">3 cases</span>' in html
+    # Each case keeps its own parametrize id, and the family row has none.
+    for case in ("one", "two", "three"):
+        assert f'<span class="param" title="{case}">{case}</span>' in html
+    # The unparametrized test stays a plain row, and the toggle sits in the
+    # heading so the whole table can be flattened again.
+    assert html.count("test_plain") >= 1
+    assert '<h2 class="row">Tests<button class="rowtoggle" id="group-toggle"' in html
