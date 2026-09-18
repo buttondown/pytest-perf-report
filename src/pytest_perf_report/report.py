@@ -25,35 +25,56 @@ esc = html.escape
 # disclosure, TODO list) built on the same tokens.
 CSS = """
 :root {
-  /* Surfaces */
-  --bg: #0f1115; --panel: #181b22; --panel2: #1f232c; --panel3: #20242e;
-  --border: #2a2f3a; --chip: #262b35;
-  /* Text */
-  --fg: #e7eaf0; --muted: #9aa3b2; --faint: #6b7280;
-  /* Semantic */
-  --accent: #6ea8fe; --warn: #f0a35e; --good: #5fd08a; --bad: #f06e6e;
-  /* Categorical chart palette */
-  --series-1: #6ea8fe; --series-2: #5fd08a; --series-3: #f0a35e; --series-4: #f06e6e;
-  --series-5: #a78bfa; --series-6: #22d3ee; --series-7: #f472b6; --series-8: #a3e635;
+  /* Surfaces: Apple's neutral dark greys over true black, not a tinted dark. */
+  --bg: #000000; --panel: #1c1c1e; --panel2: #2c2c2e; --panel3: #3a3a3c;
+  --chip: rgba(255, 255, 255, 0.08); --border: rgba(255, 255, 255, 0.10);
+  /* Text: label, secondary label, tertiary label. */
+  --fg: #f5f5f7; --muted: rgba(235, 235, 245, 0.60); --faint: rgba(235, 235, 245, 0.32);
+  /* Semantic: the dark-mode system colours. */
+  --accent: #0a84ff; --warn: #ff9f0a; --good: #30d158; --bad: #ff453a;
+  /* Categorical chart palette: the same system colours, in chart order. */
+  --series-1: #0a84ff; --series-2: #30d158; --series-3: #ff9f0a; --series-4: #ff453a;
+  --series-5: #bf5af2; --series-6: #40c8e0; --series-7: #ff375f; --series-8: #ffd60a;
+  /* Three radii and nothing else: chip, panel, capsule. */
+  --r-sm: 6px; --r-md: 12px; --r-full: 980px;
 }
 * { box-sizing: border-box; }
 body { margin: 0 auto; max-width: 1080px; padding: 32px; background: var(--bg); color: var(--fg);
-  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-h1 { font-size: 24px; margin: 0 0 4px; font-weight: 650; }
-h2 { font-size: 16px; margin: 36px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased; }
+h1 { font-size: 24px; margin: 0 0 4px; font-weight: 600; }
+/* Header: the run's identity on one dim line, then the one number that
+   answers "how long did this take?" at poster size. The hero is set in the
+   system font, not a monospace: only the figures are tabular. */
+.head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; color: var(--muted);
+  font-size: 13px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+.head .proj { color: var(--fg); font-size: 13px; font-weight: 600; }
+h1.hero { font-size: 64px; line-height: 1.05; font-weight: 600; letter-spacing: -0.035em;
+  margin: 24px 0 16px; font-variant-numeric: tabular-nums; }
+/* The whole run as one bar. The segments carry no labels — the legend above
+   already names them, and a bar that repeats it just gets louder. */
+.phasebar { display: flex; width: 100%; height: 34px; margin-top: 14px;
+  background: var(--panel2); border-radius: var(--r-md); overflow: hidden; }
+.phasebar .seg + .seg { border-left: 1px solid var(--bg); }
+/* The leftovers: real numbers, but none of them is the story on its own. */
+.strip { display: flex; flex-wrap: wrap; gap: 8px 26px; margin-top: 18px;
+  color: var(--muted); font-size: 13px; }
+.strip .v { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+h2 { font-size: 16px; margin: 36px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
+  font-weight: 600; letter-spacing: -0.01em; }
 h2.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
-code { background: var(--chip); padding: 1.5px 6px; border-radius: 5px; font-size: 12.5px;
+code { background: var(--chip); padding: 1.5px 6px; border-radius: var(--r-sm); font-size: 13px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
 /* Test labels never wrap. Under pressure the dim path gives way first — the
    test name is never clipped — and the tooltip holds the whole nodeid. */
 td.test { white-space: nowrap; }
 code.tid { display: inline-flex; max-width: 52ch; vertical-align: bottom; white-space: nowrap; }
-.rowtoggle { background: none; border: 1px solid var(--border); border-radius: 999px; color: var(--muted);
-  font: inherit; font-size: 12px; font-weight: 400; padding: 3px 11px; cursor: pointer; }
+.rowtoggle { background: var(--chip); border: none; border-radius: var(--r-full); color: var(--muted);
+  font: inherit; font-size: 12px; font-weight: 400; padding: 4px 12px; cursor: pointer; }
 .rowtoggle:hover { color: var(--fg); }
-.rowtoggle[aria-pressed="true"] { color: var(--fg); border-color: var(--accent); }
+.rowtoggle[aria-pressed="true"] { color: var(--fg); background: var(--panel3); }
 tr.fam { cursor: pointer; }
 tr.fam .caret { display: inline-block; width: 10px; color: var(--faint); }
 tr.case > td:first-child { padding-left: 38px; }
@@ -61,60 +82,65 @@ table:not(.ungrouped) tr.case .tid { display: none; }
 code.tid .tid-path { color: var(--faint); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 code.tid .tid-name { flex: none; }
 .param { display: inline-block; max-width: 30ch; overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap; vertical-align: bottom; color: var(--muted); background: var(--panel2);
-  padding: 1.5px 6px; border-radius: 5px; font-size: 12px; margin-left: 4px;
+  white-space: nowrap; vertical-align: bottom; color: var(--muted); background: var(--chip);
+  padding: 1.5px 6px; border-radius: var(--r-sm); font-size: 12px; margin-left: 4px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.sub, .note, .footer { color: var(--muted); font-size: 12.5px; }
+.sub, .note, .footer { color: var(--muted); font-size: 13px; }
 .subhead { color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase;
   letter-spacing: 0.04em; margin: 20px 0 10px; }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.cards { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; margin: 20px 0; }
-@media (max-width: 920px) { .cards { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); } }
-.card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; cursor: help; }
-.card .n { font-size: 26px; font-weight: 650; font-variant-numeric: tabular-nums; }
-.card .l { color: var(--muted); font-size: 12px; margin-top: 2px; }
+/* Cards sit on a lighter fill, with no outline: the fill is the separation. */
+.cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 24px 0 0; }
+@media (max-width: 920px) { .cards { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); } }
+.card { background: var(--panel); border-radius: var(--r-md); padding: 20px; cursor: help; }
+/* The fill lifts on hover, so the tooltip announces itself without four
+   permanent underlines competing with the numbers. */
+.card[title]:hover { background: var(--panel2); }
+.card .n { font-size: 32px; font-weight: 600; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; }
+.card .l { color: color-mix(in srgb, var(--fg) 75%, var(--muted)); font-size: 13px; margin-top: 6px; }
 .trend { font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 .trend.good { color: var(--good); }
 .trend.bad { color: var(--bad); }
 .trend.flat { color: var(--faint); }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 24px; margin: 12px 0 0; }
-.legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); white-space: nowrap; }
-.legend-item .swatch { width: 10px; height: 10px; border-radius: 2px; flex: none; }
-.legend-item .v { color: var(--fg); font-variant-numeric: tabular-nums; }
+.legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.legend-item .swatch { width: 9px; height: 9px; border-radius: var(--r-full); flex: none; }
+.legend-item .v { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
 .barchart { display: flex; flex-direction: column; gap: 8px; }
 .bar-row { display: grid; grid-template-columns: 100px 1fr 78px; align-items: center; gap: 12px; }
-.bar-row .bl { color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bar-track { height: 18px; background: var(--panel2); border: 1px solid var(--border); border-radius: 5px; overflow: hidden; }
-.bar-fill { height: 100%; background: var(--accent); border-radius: 4px; }
+.bar-row .bl { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-track { height: 18px; background: var(--panel2); border-radius: var(--r-full); overflow: hidden; }
+.bar-fill { height: 100%; background: var(--accent); border-radius: var(--r-full); }
 .bar-row .bv { text-align: right; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-variant-numeric: tabular-nums; }
-.bar { height: 6px; background: var(--accent); border-radius: 3px; display: inline-block; vertical-align: middle; }
-.proportion { display: flex; width: 100%; height: 18px; border: 1px solid var(--border);
-  border-radius: 999px; overflow: hidden; background: var(--panel2); }
+.bar { height: 6px; background: var(--accent); border-radius: var(--r-full); display: inline-block; vertical-align: middle; }
+.proportion { display: flex; width: 100%; height: 18px; border-radius: var(--r-full);
+  overflow: hidden; background: var(--panel2); }
 .proportion > span { height: 100%; }
 .proportion > span + span { border-left: 1px solid var(--bg); }
-table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border);
-  border-radius: 10px; overflow: hidden; }
-th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--border); }
-th { background: var(--panel2); color: var(--muted); font-weight: 600; font-size: 12px;
-  text-transform: uppercase; letter-spacing: 0.03em; }
+/* Tables keep their row hairlines and lose the box: 5,000 rows still need the
+   horizontal rules, but the outline around them adds nothing. */
+table { width: 100%; border-collapse: collapse; background: var(--panel);
+  border-radius: var(--r-md); overflow: hidden; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+th { background: var(--panel2); color: var(--muted); font-weight: 600; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.04em; }
 tr:last-child td { border-bottom: none; }
-tr:hover td { background: var(--panel3); }
+tr:hover td { background: var(--panel2); }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 td.muted { color: var(--muted); }
-.pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11.5px;
+.pill { display: inline-block; padding: 1px 8px; border-radius: var(--r-full); font-size: 11px;
   font-weight: 600; background: var(--chip); color: var(--fg); }
-.pill.good { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
-.pill.warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
-.pill.bad { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
+.pill.good { background: color-mix(in srgb, var(--good) 22%, transparent); color: var(--good); }
+.pill.warn { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
+.pill.bad { background: color-mix(in srgb, var(--bad) 22%, transparent); color: var(--bad); }
 .pill.neutral { background: var(--chip); color: var(--muted); }
-.callout { background: color-mix(in srgb, var(--good) 7%, var(--panel));
-  border: 1px solid color-mix(in srgb, var(--good) 38%, var(--border));
-  border-radius: 8px; padding: 14px 16px; margin: 16px 0; }
-.callout.warn { background: color-mix(in srgb, var(--warn) 7%, var(--panel));
-  border-color: color-mix(in srgb, var(--warn) 38%, var(--border)); }
-.callout.bad { background: color-mix(in srgb, var(--bad) 7%, var(--panel));
-  border-color: color-mix(in srgb, var(--bad) 38%, var(--border)); }
+/* A callout is a tinted panel, not an outlined one, so the tint carries more
+   of the signal than it did behind a border. */
+.callout { background: color-mix(in srgb, var(--good) 14%, var(--panel));
+  border-radius: var(--r-md); padding: 16px 18px; margin: 18px 0; }
+.callout.warn { background: color-mix(in srgb, var(--warn) 14%, var(--panel)); }
+.callout.bad { background: color-mix(in srgb, var(--bad) 14%, var(--panel)); }
 .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border); }
 
 /* ---- Report-specific extensions on kit tokens ----------------------------- */
@@ -124,28 +150,34 @@ th.sortable:hover { color: var(--fg); }
 .tl-label { width: 52px; color: var(--muted); font-size: 11px; text-align: right;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; flex-shrink: 0; }
 .lane { position: relative; flex: 1; height: 18px; background: var(--panel2);
-  border: 1px solid var(--border); border-radius: 5px; overflow: hidden; }
+  border-radius: var(--r-full); overflow: hidden; }
 .lane .seg { position: absolute; top: 0; bottom: 0; }
 .tl-axis { display: flex; justify-content: space-between; color: var(--faint);
   font-size: 11px; margin: 2px 0 0 62px; font-variant-numeric: tabular-nums; }
-details { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; margin: 8px 0; }
-details summary { cursor: pointer; padding: 9px 14px; }
+details { background: var(--panel); border-radius: var(--r-md); margin: 8px 0; }
+details summary { cursor: pointer; padding: 10px 14px; }
 details pre { margin: 0; padding: 12px 14px; overflow-x: auto; font-size: 12px; color: var(--bad);
   border-top: 1px solid var(--border); }
 ol.todos { padding-left: 0; list-style: none; counter-reset: todo; }
-ol.todos li { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
-  padding: 14px 16px 14px 52px; margin: 10px 0; position: relative; counter-increment: todo; }
-ol.todos li::before { content: counter(todo); position: absolute; left: 16px; top: 14px;
-  width: 24px; height: 24px; border-radius: 50%; background: var(--panel2); color: var(--muted);
-  font-weight: 650; display: flex; align-items: center; justify-content: center; font-size: 13px; }
-ol.todos .t { font-weight: 650; margin-right: 8px; }
+ol.todos li { background: var(--panel); border-radius: var(--r-md);
+  padding: 16px 18px 16px 52px; margin: 10px 0; position: relative; counter-increment: todo; }
+ol.todos li::before { content: counter(todo); position: absolute; left: 18px; top: 16px;
+  width: 24px; height: 24px; border-radius: var(--r-full); background: var(--chip); color: var(--muted);
+  font-weight: 600; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+ol.todos .t { font-weight: 600; margin-right: 8px; }
 ol.todos .b { color: var(--muted); font-size: 13px; margin-top: 4px; }
-.tabs { display: flex; gap: 4px; margin: 36px 0 0; border-bottom: 1px solid var(--border); }
-.tabs button { background: none; border: none; border-bottom: 2px solid transparent; color: var(--muted);
-  font: inherit; font-weight: 600; font-size: 13px; padding: 8px 14px; cursor: pointer; }
+/* A segmented control, not an underlined tab strip. */
+.tabs { display: inline-flex; flex-wrap: wrap; gap: 2px; margin: 32px 0 0; padding: 2px;
+  background: var(--chip); border-radius: var(--r-full); }
+.tabs button { background: none; border: none; border-radius: var(--r-full); color: var(--muted);
+  font: inherit; font-weight: 600; font-size: 13px; padding: 6px 14px; cursor: pointer; }
 .tabs button:hover { color: var(--fg); }
-.tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
-.tab-panel > h2:first-child { margin-top: 20px; border-bottom: none; padding-bottom: 0; }
+.tabs button[aria-selected="true"] { color: var(--fg); background: var(--panel3);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.32); }
+.tabs .badge { margin-left: 7px; padding: 1px 7px; border-radius: var(--r-full); background: var(--chip);
+  color: var(--muted); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tabs button[aria-selected="true"] .badge { color: var(--fg); }
+.tab-panel > h2:first-child { margin-top: 24px; border-bottom: none; padding-bottom: 0; }
 """
 
 TAB_JS = """
@@ -281,6 +313,48 @@ def _card(value: str, label: str, tip: str = "") -> str:
     )
 
 
+def _strip(items: list[tuple[str, str]]) -> str:
+    """The metrics that are worth a number but not worth a card."""
+    return (
+        '<div class="strip">'
+        + "".join(
+            f'<span>{esc(label)} <span class="v">{esc(value)}</span></span>'
+            for label, value in items
+        )
+        + "</div>"
+    )
+
+
+PHASE_COLORS = {
+    "startup, imports": "var(--series-5)",
+    "collection": "var(--series-1)",
+    "session fixtures": "var(--series-3)",
+    "test bodies": "var(--series-2)",
+    "orchestration": "var(--chip)",
+}
+
+
+def _phase_bar(phases: list[tuple[str, float]]) -> str:
+    """The run as one bar: every phase of the wall clock, end to end. The
+    legend above names the segments, so the segments carry no labels."""
+    total = sum(v for _, v in phases) or 1.0
+    segments = "".join(
+        f'<span class="seg" style="width:{value / total * 100:.2f}%;'
+        f'background:{PHASE_COLORS[label]}" '
+        f'title="{esc(label)}: {fmt_seconds(value)} ({value / total:.1%})"></span>'
+        for label, value in phases
+        if value > 0
+    )
+    legend = _legend(
+        [
+            (PHASE_COLORS[label], label, fmt_seconds(value))
+            for label, value in phases
+            if value > 0
+        ]
+    )
+    return f'{legend}<div class="phasebar">{segments}</div>'
+
+
 def _num(raw: Any, formatted: str) -> str:
     """Numeric cell; data-v is the sort key SORT_JS reads."""
     return f'<td class="num" data-v="{raw}">{formatted}</td>'
@@ -351,13 +425,7 @@ def _stack_bar(decomposition: list[tuple[str, float]]) -> str:
             if v > 0
         ]
     )
-    return (
-        f'<div class="proportion">{segments}</div>{legend}'
-        '<div class="note" style="margin-top:8px">Approximate: DB, real-socket HTTP, '
-        "and sleep are measured waits; mocked HTTP is CPU and counts under “other "
-        "CPU”; GC is part of CPU; “other wait” is whatever wall time remains "
-        "unattributed (subprocesses, locks, disk).</div>"
-    )
+    return f'<div class="proportion">{segments}</div>{legend}'
 
 
 TIMELINE_COLORS = {
@@ -437,11 +505,6 @@ def _timeline(lanes: list[dict[str, Any]]) -> str:
     return (
         f'{rows}<div class="tl-axis"><span>0s</span><span>{fmt_seconds(total)}</span></div>'
         f"{legend}"
-        '<div class="note" style="margin-top:8px">One lane per process. The startup '
-        "segment is estimated from pre-pytest CPU (interpreter boot and imports "
-        "happen before any plugin clock exists); “session setup” is the first "
-        "test's setup phase, which pytest charges with all session-scoped "
-        "fixtures.</div>"
     )
 
 
@@ -521,8 +584,7 @@ def _baseline_section(delta: dict[str, Any]) -> str:
     )
     html = (
         f"<h2>Vs baseline ({esc(base_label)})</h2>"
-        f'<div class="sub">{delta["common_tests"]:,} tests present in both runs; '
-        "per-test comparisons use only those.</div>"
+        f'<div class="sub">{delta["common_tests"]:,} tests present in both runs.</div>'
         + _table(
             [("metric", False), ("baseline", True), ("this run", True), ("Δ", True)],
             [rows],
@@ -604,13 +666,11 @@ def render(
     ]
     subtitle = " · ".join(p for p in sub_parts if p)
 
+    # --- headline: four cards, then the numbers that don't earn one ---
+    decomp = dict(stats["decomposition"])
+    db_vendor = ", ".join(sorted(merged["db_vendors"])) or None
+
     cards = [
-        _card(
-            fmt_seconds(stats["suite_wall_s"]),
-            "suite wall time",
-            "End-to-end clock for the whole run, including per-process startup "
-            "and collection (paid once per xdist worker).",
-        ),
         _card(
             fmt_seconds(stats["agg_wall_s"]),
             "aggregate test time",
@@ -618,97 +678,17 @@ def render(
             "ignoring parallelism.",
         ),
         _card(
-            fmt_seconds(stats["cpu_s"]),
-            "CPU time",
-            "Process CPU consumed inside tests; the rest of test time is waiting "
-            "(DB, network, disk, locks).",
-        ),
-        _card(
             fmt_seconds(stats["p50"]),
             "median test",
             "Half of all tests finish within this.",
         ),
-        _card(
-            fmt_seconds(stats["p99"]),
-            "p99 test",
-            "99% of tests finish within this.",
-        ),
-        _card(
-            fmt_seconds(stats["startup_collect_s"]),
-            "startup + collect",
-            "Interpreter boot, imports, and collection before the first test — "
-            "paid on every run, even single-test -k runs."
-            + (
-                f" ≈{fmt_seconds(stats['startup_preconfigure_s'])} pre-pytest imports"
-                f" + {fmt_seconds(stats['startup_collection_s'])} collection;"
-                " see the Startup tab."
-                if (stats["startup_preconfigure_s"] or stats["startup_collection_s"])
-                else ""
-            ),
-        ),
-    ]
-    # With a single worker "parallel efficiency" would just restate startup
-    # overhead in a confusing costume; only meaningful when work is fanned out.
-    if stats["parallel_efficiency"] is not None and workers >= 2:
-        cards.append(
-            _card(
-                f"{stats['parallel_efficiency']:.0%}",
-                "parallel efficiency",
-                "Aggregate test time ÷ (suite wall × workers): how busy the "
-                "workers were, net of startup and scheduling gaps.",
-            )
-        )
-
-    db_vendor = ", ".join(sorted(merged["db_vendors"])) or None
-    cards += [
         _card(
             f"{stats['db_queries']:,}",
             f"DB queries ({db_vendor})" if db_vendor else "DB queries",
             "Statements observed by the ORM-level probes during tests "
             "(plus any outside-of-test work, noted in the DB tab).",
         ),
-        _card(
-            fmt_seconds(stats["db_time_s"]),
-            "in-DB time",
-            "Wall time spent waiting on the database inside tests.",
-        ),
-        _card(
-            f"{stats['db_share']:.1%}",
-            "DB share of test time",
-            "In-DB time as a share of aggregate test time.",
-        ),
-        _card(
-            f"{stats['http_calls']:,}",
-            "HTTP calls",
-            "HTTP client calls, including ones answered by transport-level "
-            "mocks (responses, respx) that never hit the network.",
-        ),
-        _card(
-            fmt_seconds(stats["http_time_s"]),
-            "HTTP time",
-            "Wall time inside HTTP client calls; mocked calls cost CPU, "
-            "not network wait.",
-        ),
-        _card(
-            fmt_seconds(stats["sleep_s"]),
-            "time.sleep()",
-            "Total time.sleep() during tests — pure dead time.",
-        ),
-        _card(
-            f"{stats['file_opens']:,}",
-            "file opens",
-            "open()/io.open() calls during tests (module imports not included).",
-        ),
     ]
-    io = merged["io"]
-    if io["read_bytes"] or io["write_bytes"]:
-        cards.append(
-            _card(
-                f"{fmt_bytes(io['read_bytes'])} / {fmt_bytes(io['write_bytes'])}",
-                "disk read / written",
-                "Real disk bytes for this process, from /proc/self/io (Linux only).",
-            )
-        )
     if stats.get("peak_rss_bytes"):
         cards.append(
             _card(
@@ -716,6 +696,35 @@ def render(
                 "peak RSS / process",
                 "Memory high-water mark; it never comes back down, so one hungry "
                 "test sets the floor for the whole worker.",
+            )
+        )
+    else:
+        cards.append(
+            _card(
+                f"{stats['tests']:,}",
+                "tests",
+                "Tests that reported a result in this run.",
+            )
+        )
+
+    strip = [
+        ("GC", fmt_seconds(stats["gc_s"])),
+        ("other CPU", fmt_seconds(decomp["other CPU"])),
+        ("other wait", fmt_seconds(decomp["other wait"])),
+        ("HTTP", f"{stats['http_calls']:,} · {fmt_seconds(stats['http_time_s'])}"),
+        ("file opens", f"{stats['file_opens']:,}"),
+        ("time.sleep()", fmt_seconds(stats["sleep_s"])),
+    ]
+    # With a single worker "parallel efficiency" would just restate startup
+    # overhead in a confusing costume; only meaningful when work is fanned out.
+    if stats["parallel_efficiency"] is not None and workers >= 2:
+        strip.append(("parallel efficiency", f"{stats['parallel_efficiency']:.0%}"))
+    io = merged["io"]
+    if io["read_bytes"] or io["write_bytes"]:
+        strip.append(
+            (
+                "disk read / written",
+                f"{fmt_bytes(io['read_bytes'])} / {fmt_bytes(io['write_bytes'])}",
             )
         )
 
@@ -739,15 +748,7 @@ def render(
             ),
         )
     else:
-        top_component = max(stats["decomposition"], key=lambda kv: kv[1])
-        callout_cls, callout = (
-            "",
-            (
-                f"<strong>All tests passed.</strong> Largest time component: "
-                f"{esc(top_component[0])} at {fmt_seconds(top_component[1])} "
-                f"({top_component[1] / (stats['agg_wall_s'] or 1):.0%} of test time)."
-            ),
-        )
+        callout_cls, callout = "", ""
 
     # --- failures ---
     failures_html = ""
@@ -862,22 +863,11 @@ def render(
             for t in sorted(cases, key=lambda t: t["wall_s"], reverse=True)
         )
     parametrized = sum(1 for _, cases in grouped if len(cases) > 1)
-    tests_note = (
-        "All tests, slowest first. The fastest tests put a floor under per-test "
-        "overhead — anything a slow test spends beyond its own work shows up "
-        "against that baseline."
-    )
-    if parametrized:
-        tests_note = (
-            f"{parametrized} parametrized test"
-            f"{'s are' if parametrized != 1 else ' is'} grouped: the row totals "
-            "every case, click it to open the cases, or ungroup the whole table "
-            "above. " + tests_note
-        )
+    tests_note = ""
     if len(by_wall_asc) > MAX_TEST_TABLE_ROWS:
         tests_note = (
             f"Showing the {MAX_TEST_TABLE_ROWS:,} slowest of {len(by_wall_asc):,} "
-            f"tests (the rest are in --perf-report-json). " + tests_note
+            "tests (the rest are in --perf-report-json)."
         )
     tests_toggle = (
         '<button class="rowtoggle" id="group-toggle" aria-pressed="true">'
@@ -936,10 +926,6 @@ def render(
                 ("queries", True),
             ],
             rows,
-            note="“Total” includes fixtures set up on demand from inside the body "
-            "(request.getfixturevalue); “self” subtracts them — read self as where "
-            "the time actually lives. “Queries” counts DB statements issued during "
-            "the fixture's own setup (w = writes).",
         )
 
     # --- per-test taxes: autouse function-scoped fixtures ---
@@ -954,7 +940,6 @@ def render(
         reverse=True,
     )[:15]
     if taxes:
-        tax_total = sum(row.get("self_s", 0.0) for _, row in taxes)
         rows = [
             f"<tr><td><code>{esc(name)}</code></td>"
             + _num(row.get("self_s", 0.0), fmt_seconds(row.get("self_s", 0.0)))
@@ -967,21 +952,15 @@ def render(
             + "</tr>"
             for name, row in taxes
         ]
-        taxes_html = (
-            "<h2>Per-test taxes (autouse fixtures)</h2>"
-            f'<div class="sub">Function-scoped autouse fixtures run for every test '
-            f"in their scope whether needed or not — {fmt_seconds(tax_total)} of "
-            "self time in this run.</div>"
-            + _table(
-                [
-                    ("fixture", False),
-                    ("self total", True),
-                    ("runs", True),
-                    ("per run", True),
-                    ("queries", True),
-                ],
-                rows,
-            )
+        taxes_html = "<h2>Per-test taxes (autouse fixtures)</h2>" + _table(
+            [
+                ("fixture", False),
+                ("self total", True),
+                ("runs", True),
+                ("per run", True),
+                ("queries", True),
+            ],
+            rows,
         )
 
     # --- query shapes ---
@@ -1097,8 +1076,6 @@ def render(
                     ("transport", False),
                 ],
                 rows,
-                note="“Mocked / in-process” means no request from this host ever reached "
-                "the raw HTTP layer — it was answered by a transport-level mock.",
             )
             if rows
             else '<div class="note">No HTTP client calls observed.</div>'
@@ -1124,8 +1101,6 @@ def render(
                     ("kind", False),
                 ],
                 net_rows,
-                note="Python-level sockets only; database drivers that connect in C "
-                "(e.g. psycopg) don't appear here — their queries are measured above.",
             )
 
     # --- cpu profile (opt-in via --perf-report-cpu-profile) ---
@@ -1152,9 +1127,6 @@ def render(
                 ("calls", True),
             ],
             rows,
-            note="Function self-time aggregated across every test "
-            "(--perf-report-cpu-profile). Profiling overhead inflates absolute "
-            "times; the ranking and shares are what to trust.",
         )
 
     # --- files ---
@@ -1180,24 +1152,10 @@ def render(
         files_html = "<h2>Most-opened files</h2>" + _table(
             [("path", False), ("opens", True), ("≈ re-read", True)],
             rows,
-            note=f"{merged['files']['total_opens']:,} opens of "
-            f"{merged['files']['distinct']:,} distinct files via open()/io.open() "
-            "(module imports not included). “≈ re-read” is opens × current file "
-            "size — a volume estimate for whether caching is worth it.",
         )
 
     # --- startup & collection ---
     startup_html = ""
-    pre_s = stats.get("startup_preconfigure_s", 0.0)
-    collection_s = stats.get("startup_collection_s", 0.0)
-    if pre_s or collection_s:
-        startup_html += (
-            f'<div class="sub">{fmt_seconds(stats["startup_collect_s"])} before the '
-            f"first test: ≈{fmt_seconds(pre_s)} of pre-pytest work (interpreter "
-            "boot, plugin and conftest imports, estimated from process CPU) + "
-            f"{fmt_seconds(collection_s)} of collection. Paid per process — every "
-            "xdist worker re-pays it.</div>"
-        )
     collect_modules = sorted(
         merged.get("collect_modules", {}).items(), key=lambda kv: kv[1], reverse=True
     )[:15]
@@ -1212,18 +1170,6 @@ def render(
         startup_html += "<h2>Slowest test modules to collect</h2>" + _table(
             [("module", False), ("collect time", True)],
             rows,
-            note="Collecting a module imports it, so module-scope work (globs, "
-            "file reads, building parametrize lists) lands here — and runs on "
-            "every collection, even -k runs that select none of its tests.",
-        )
-    modifyitems_s = stats.get("collect_modifyitems_s", 0.0)
-    if modifyitems_s >= 0.05:
-        startup_html += (
-            "<h2>Collection hooks</h2>"
-            f'<div class="sub">pytest_collection_modifyitems implementations '
-            f"(all plugins and conftests together) took "
-            f"{fmt_seconds(modifyitems_s)}. Hooks that inspect every collected "
-            "item — source reads, marker walks — hide in this number.</div>"
         )
     startup_imports = sorted(
         merged.get("startup_imports", {}).items(),
@@ -1242,10 +1188,6 @@ def render(
         startup_html += "<h2>Heaviest startup imports</h2>" + _table(
             [("module", False), ("self", True), ("cumulative", True)],
             rows,
-            note="Imports executed while pytest loaded plugins and conftests "
-            "(before collection) — settings modules, app registries, and "
-            "everything they pull in. “Cumulative” includes nested imports; "
-            "“self” is the module's own body.",
         )
 
     # --- warnings ---
@@ -1283,6 +1225,10 @@ def render(
             "with the controller — every number below under-reports.</div>"
         )
 
+    callout_html = (
+        f'<div class="callout {callout_cls}">{callout}</div>' if callout else ""
+    )
+
     generated = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     command = meta.get("args", "")
 
@@ -1294,25 +1240,35 @@ def render(
 <h2 class="row">Tests{tests_toggle}</h2>
 {tests_table}
 """
-    # (label, key, panel html) — a tab only exists when it has content.
+    overview_panel = f"""
+{timeline_html}
+<h2>Where the time went</h2>
+{_stack_bar(stats["decomposition"])}
+{baseline_html}
+"""
+
+    # (label, key, panel html, badge) — a tab only exists when it has content.
     panels = [
-        ("Tests", "tests", tests_panel),
-        ("Startup", "startup", startup_html),
-        ("Fixtures", "fixtures", fixtures_html + taxes_html),
-        ("DB", "db", db_html),
-        ("CPU", "cpu", cpu_html),
-        ("HTTP", "http", http_html),
-        ("Files", "files", files_html),
-        ("Warnings", "warnings", warnings_html),
+        ("Overview", "overview", overview_panel, ""),
+        ("Tests", "tests", tests_panel, f"{stats['tests']:,}"),
+        ("Startup", "startup", startup_html, ""),
+        ("Fixtures", "fixtures", fixtures_html + taxes_html, ""),
+        ("DB", "db", db_html, f"{stats['db_queries']:,}"),
+        ("CPU", "cpu", cpu_html, ""),
+        ("HTTP", "http", http_html, f"{stats['http_calls']:,}"),
+        ("Files", "files", files_html, f"{stats['file_opens']:,}"),
+        ("Warnings", "warnings", warnings_html, f"{stats['warnings_total']:,}"),
     ]
-    panels = [(label, key, body) for label, key, body in panels if body.strip()]
+    panels = [row for row in panels if row[2].strip()]
     tab_buttons = "".join(
-        f'<button data-tab="{key}" aria-selected="false">{esc(label)}</button>'
-        for label, key, _ in panels
+        f'<button data-tab="{key}" aria-selected="false">{esc(label)}'
+        + (f'<span class="badge">{esc(badge)}</span>' if badge else "")
+        + "</button>"
+        for label, key, _, badge in panels
     )
     tab_panels = "".join(
         f'<section class="tab-panel" data-tab="{key}" hidden>{body}</section>'
-        for _, key, body in panels
+        for _, key, body, _ in panels
     )
 
     return f"""<!DOCTYPE html>
@@ -1320,20 +1276,17 @@ def render(
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Test suite performance report — {esc(meta.get("project", ""))}</title>
 <style>{CSS}</style></head><body>
-<h1>Test suite performance report</h1>
-<div class="sub">{esc(meta.get("project", ""))} · {subtitle}</div>
+<div class="head"><span class="proj">{esc(meta.get("project", ""))}</span>
+<span>test suite performance · {subtitle}</span></div>
 
 {missing_html}
-<div class="callout {callout_cls}">{callout}</div>
+<h1 class="hero" title="End-to-end clock for the whole run, including per-process startup and collection (paid once per xdist worker).">{fmt_seconds(stats["total_wall_s"])}</h1>
+{_phase_bar(stats["phases"])}
 
 <div class="cards">{"".join(cards)}</div>
+{_strip(strip)}
 
-{timeline_html}
-
-<h2>Where the time went</h2>
-{_stack_bar(stats["decomposition"])}
-
-{baseline_html}
+{callout_html}
 
 <div class="tabs" role="tablist">{tab_buttons}</div>
 {tab_panels}
@@ -1342,8 +1295,7 @@ def render(
 <ol class="todos">{todo_items}</ol>
 
 <div class="footer">Generated {generated} by pytest-perf-report ·
-command: <code>{esc(command)}</code> · numeric column headers are click-to-sort
-· hover a headline card for what it means.</div>
+command: <code>{esc(command)}</code></div>
 <script>{SORT_JS}</script>
 <script>{GROUP_JS}</script>
 <script>{TAB_JS}</script>

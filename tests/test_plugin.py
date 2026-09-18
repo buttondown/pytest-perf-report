@@ -632,7 +632,6 @@ def test_collection_costs_recorded(pytester):
     html = (pytester.path / "report.html").read_text()
     assert "Slowest test modules to collect" in html
     assert "test_slow_import" in html
-    assert "Collection hooks" in html
 
 
 def test_startup_imports_captured(pytester):
@@ -709,6 +708,32 @@ def test_report_tabs_and_single_tests_table(pytester):
     # Headline cards carry tooltips in a single grid.
     assert html.count('<div class="cards">') == 1
     assert 'title="End-to-end clock for the whole run' in html
+
+
+def test_report_header_leads_with_the_clock(pytester):
+    pytester.makepyfile(
+        """
+        def test_a(): pass
+        def test_b(): pass
+        """
+    )
+    pytester.runpytest("--perf-report=report.html").assert_outcomes(passed=2)
+    html = (pytester.path / "report.html").read_text()
+    # One number at the top, then the phases of the run that add up to it.
+    assert '<h1 class="hero"' in html
+    assert '<div class="phasebar">' in html
+    assert "startup, imports" in html and "test bodies" in html
+    # Four headline cards, each a number and a label and nothing else.
+    assert html.count('<div class="card"') == 4
+    assert '<div class="strip">' in html
+    # A clean run says nothing where the callout used to be.
+    assert "All tests passed" not in html
+    # The run timeline and time decomposition moved behind an Overview tab,
+    # and the busiest tabs carry their count.
+    assert '<button data-tab="overview"' in html
+    assert html.index("Where the time went") > html.index('data-tab="overview"')
+    assert '<button data-tab="tests" aria-selected="false">Tests' in html
+    assert '<span class="badge">2</span>' in html
 
 
 def test_parametrized_cases_group_into_one_family_row(pytester):

@@ -106,6 +106,34 @@ def compute(merged: dict[str, Any]) -> dict[str, Any]:
         agg_wall / (suite_wall * workers) if suite_wall and workers else None
     )
 
+    # Wall-clock-shaped decomposition of the whole run, for the report header.
+    # Startup and collection are per-process costs, so the heaviest process
+    # stands for the critical path; session fixtures are what pytest bills to
+    # each process's first test; test bodies are the rest of an average
+    # worker's in-test time; orchestration is the pytest-visible wall time
+    # those three don't explain (scheduling, teardown, reporting).
+    session_fixture_s = max(
+        (lane.get("first_test_setup_s", 0.0) for lane in merged.get("lanes", [])),
+        default=0.0,
+    )
+    per_worker_test_s = agg_wall / workers
+    session_fixture_s = min(session_fixture_s, per_worker_test_s)
+    startup_s = suite.get("startup_preconfigure_s", 0.0)
+    collection_s = suite.get("startup_collection_s", 0.0)
+    body_s = per_worker_test_s - session_fixture_s
+    phases = [
+        ("startup, imports", startup_s),
+        ("collection", collection_s),
+        ("session fixtures", session_fixture_s),
+        ("test bodies", body_s),
+        # suite_wall starts at pytest_configure, so it covers every phase but
+        # startup; the true end-to-end clock is startup plus suite_wall.
+        (
+            "orchestration",
+            max(0.0, suite_wall - collection_s - session_fixture_s - body_s),
+        ),
+    ]
+
     return {
         "outcomes": outcomes,
         "tests": len(per_test),
@@ -135,6 +163,10 @@ def compute(merged: dict[str, Any]) -> dict[str, Any]:
         "p99": percentile(walls, 0.99),
         "mean": agg_wall / len(per_test) if per_test else 0.0,
         "decomposition": decomposition,
+        "phases": phases,
+        # End-to-end, including the interpreter boot and imports that happen
+        # before pytest_configure can start a clock.
+        "total_wall_s": sum(v for _, v in phases),
         "parallel_efficiency": parallel_efficiency,
         "suite_wall_s": suite_wall,
         "startup_collect_s": suite.get("startup_collect_s", 0.0),
