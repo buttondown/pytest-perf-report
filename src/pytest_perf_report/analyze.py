@@ -285,6 +285,8 @@ def build_baseline_delta(
 
     return {
         "baseline_meta": baseline.get("meta") or {},
+        # Report JSON written before 0.4.0 carries no schema key.
+        "baseline_schema": baseline.get("schema"),
         "totals": totals,
         "shape_changes": shape_changes[:12],
         "test_regressions": regressions[:10],

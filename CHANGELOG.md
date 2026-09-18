@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.0
+
+- A `pytest-perf-report` console script runs pytest with the report enabled,
+  so `uvx pytest-perf-report` and `uv run --with pytest-perf-report
+  pytest-perf-report` work without installing the plugin.
+- Parametrized cases are grouped into one family row in the tests table, with
+  a toggle to flatten the table.
+- `pathlib` file opens are counted on Python 3.10.
+- The `--perf-report-json` output carries a top-level `schema` key. A baseline
+  written with a different schema is flagged in the report and the terminal
+  summary.
+- The report's HTML skeleton, stylesheet, and scripts moved into
+  `templates/`; the generated page is unchanged.
+
 ## 0.3.0
 
 First public release. Earlier versions lived inside Buttondown's monorepo and

@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Test suite performance report — demo</title>
+<style>:root {
+  /* Surfaces: Apple's neutral dark greys over true black, not a tinted dark. */
+  --bg: #000000; --panel: #1c1c1e; --panel2: #2c2c2e; --panel3: #3a3a3c;
+  --chip: rgba(255, 255, 255, 0.08); --border: rgba(255, 255, 255, 0.10);
+  /* Text: label, secondary label, tertiary label. */
+  --fg: #f5f5f7; --muted: rgba(235, 235, 245, 0.60); --faint: rgba(235, 235, 245, 0.32);
+  /* Semantic: the dark-mode system colours. */
+  --accent: #0a84ff; --warn: #ff9f0a; --good: #30d158; --bad: #ff453a;
+  /* Categorical chart palette: the same system colours, in chart order. */
+  --series-1: #0a84ff; --series-2: #30d158; --series-3: #ff9f0a; --series-4: #ff453a;
+  --series-5: #bf5af2; --series-6: #40c8e0; --series-7: #ff375f; --series-8: #ffd60a;
+  /* Three radii and nothing else: chip, panel, capsule. */
+  --r-sm: 6px; --r-md: 12px; --r-full: 980px;
+}
+* { box-sizing: border-box; }
+body { margin: 0 auto; max-width: 1080px; padding: 32px; background: var(--bg); color: var(--fg);
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased; }
+h1 { font-size: 24px; margin: 0 0 4px; font-weight: 600; }
+/* Header: the run's identity on one dim line, then the one number that
+   answers "how long did this take?" at poster size. The hero is set in the
+   system font, not a monospace: only the figures are tabular. */
+.head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; color: var(--muted);
+  font-size: 13px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+.head .proj { color: var(--fg); font-size: 13px; font-weight: 600; }
+h1.hero { font-size: 64px; line-height: 1.05; font-weight: 600; letter-spacing: -0.035em;
+  margin: 24px 0 16px; font-variant-numeric: tabular-nums; }
+/* The whole run as one bar. The segments carry no labels — the legend above
+   already names them, and a bar that repeats it just gets louder. */
+.phasebar { display: flex; width: 100%; height: 34px; margin-top: 14px;
+  background: var(--panel2); border-radius: var(--r-md); overflow: hidden; }
+.phasebar .seg + .seg { border-left: 1px solid var(--bg); }
+/* The leftovers: real numbers, but none of them is the story on its own. */
+.strip { display: flex; flex-wrap: wrap; gap: 8px 26px; margin-top: 18px;
+  color: var(--muted); font-size: 13px; }
+.strip .v { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+h2 { font-size: 16px; margin: 36px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
+  font-weight: 600; letter-spacing: -0.01em; }
+h2.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code { background: var(--chip); padding: 1.5px 6px; border-radius: var(--r-sm); font-size: 13px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+/* Test labels never wrap. Under pressure the dim path gives way first — the
+   test name is never clipped — and the tooltip holds the whole nodeid. */
+td.test { white-space: nowrap; }
+code.tid { display: inline-flex; max-width: 52ch; vertical-align: bottom; white-space: nowrap; }
+.rowtoggle { background: var(--chip); border: none; border-radius: var(--r-full); color: var(--muted);
+  font: inherit; font-size: 12px; font-weight: 400; padding: 4px 12px; cursor: pointer; }
+.rowtoggle:hover { color: var(--fg); }
+.rowtoggle[aria-pressed="true"] { color: var(--fg); background: var(--panel3); }
+tr.fam { cursor: pointer; }
+tr.fam .caret { display: inline-block; width: 10px; color: var(--faint); }
+tr.case > td:first-child { padding-left: 38px; }
+table:not(.ungrouped) tr.case .tid { display: none; }
+code.tid .tid-path { color: var(--faint); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+code.tid .tid-name { flex: none; }
+.param { display: inline-block; max-width: 30ch; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; vertical-align: bottom; color: var(--muted); background: var(--chip);
+  padding: 1.5px 6px; border-radius: var(--r-sm); font-size: 12px; margin-left: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.sub, .note, .footer { color: var(--muted); font-size: 13px; }
+.subhead { color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.04em; margin: 20px 0 10px; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+/* Cards sit on a lighter fill, with no outline: the fill is the separation. */
+.cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 24px 0 0; }
+@media (max-width: 920px) { .cards { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); } }
+.card { background: var(--panel); border-radius: var(--r-md); padding: 20px; cursor: help; }
+/* The fill lifts on hover, so the tooltip announces itself without four
+   permanent underlines competing with the numbers. */
+.card[title]:hover { background: var(--panel2); }
+.card .n { font-size: 32px; font-weight: 600; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; }
+.card .l { color: color-mix(in srgb, var(--fg) 75%, var(--muted)); font-size: 13px; margin-top: 6px; }
+.trend { font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.trend.good { color: var(--good); }
+.trend.bad { color: var(--bad); }
+.trend.flat { color: var(--faint); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 24px; margin: 12px 0 0; }
+.legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.legend-item .swatch { width: 9px; height: 9px; border-radius: var(--r-full); flex: none; }
+.legend-item .v { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.barchart { display: flex; flex-direction: column; gap: 8px; }
+.bar-row { display: grid; grid-template-columns: 100px 1fr 78px; align-items: center; gap: 12px; }
+.bar-row .bl { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-track { height: 18px; background: var(--panel2); border-radius: var(--r-full); overflow: hidden; }
+.bar-fill { height: 100%; background: var(--accent); border-radius: var(--r-full); }
+.bar-row .bv { text-align: right; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-variant-numeric: tabular-nums; }
+.bar { height: 6px; background: var(--accent); border-radius: var(--r-full); display: inline-block; vertical-align: middle; }
+.proportion { display: flex; width: 100%; height: 18px; border-radius: var(--r-full);
+  overflow: hidden; background: var(--panel2); }
+.proportion > span { height: 100%; }
+.proportion > span + span { border-left: 1px solid var(--bg); }
+/* Tables keep their row hairlines and lose the box: 5,000 rows still need the
+   horizontal rules, but the outline around them adds nothing. */
+table { width: 100%; border-collapse: collapse; background: var(--panel);
+  border-radius: var(--r-md); overflow: hidden; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+th { background: var(--panel2); color: var(--muted); font-weight: 600; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.04em; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--panel2); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.muted { color: var(--muted); }
+.pill { display: inline-block; padding: 1px 8px; border-radius: var(--r-full); font-size: 11px;
+  font-weight: 600; background: var(--chip); color: var(--fg); }
+.pill.good { background: color-mix(in srgb, var(--good) 22%, transparent); color: var(--good); }
+.pill.warn { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
+.pill.bad { background: color-mix(in srgb, var(--bad) 22%, transparent); color: var(--bad); }
+.pill.neutral { background: var(--chip); color: var(--muted); }
+/* A callout is a tinted panel, not an outlined one, so the tint carries more
+   of the signal than it did behind a border. */
+.callout { background: color-mix(in srgb, var(--good) 14%, var(--panel));
+  border-radius: var(--r-md); padding: 16px 18px; margin: 18px 0; }
+.callout.warn { background: color-mix(in srgb, var(--warn) 14%, var(--panel)); }
+.callout.bad { background: color-mix(in srgb, var(--bad) 14%, var(--panel)); }
+.footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border); }
+
+/* ---- Report-specific extensions on kit tokens ----------------------------- */
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--fg); }
+.tl-row { display: flex; align-items: center; gap: 10px; margin: 5px 0; }
+.tl-label { width: 52px; color: var(--muted); font-size: 11px; text-align: right;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; flex-shrink: 0; }
+.lane { position: relative; flex: 1; height: 18px; background: var(--panel2);
+  border-radius: var(--r-full); overflow: hidden; }
+.lane .seg { position: absolute; top: 0; bottom: 0; }
+.tl-axis { display: flex; justify-content: space-between; color: var(--faint);
+  font-size: 11px; margin: 2px 0 0 62px; font-variant-numeric: tabular-nums; }
+details { background: var(--panel); border-radius: var(--r-md); margin: 8px 0; }
+details summary { cursor: pointer; padding: 10px 14px; }
+details pre { margin: 0; padding: 12px 14px; overflow-x: auto; font-size: 12px; color: var(--bad);
+  border-top: 1px solid var(--border); }
+ol.todos { padding-left: 0; list-style: none; counter-reset: todo; }
+ol.todos li { background: var(--panel); border-radius: var(--r-md);
+  padding: 16px 18px 16px 52px; margin: 10px 0; position: relative; counter-increment: todo; }
+ol.todos li::before { content: counter(todo); position: absolute; left: 18px; top: 16px;
+  width: 24px; height: 24px; border-radius: var(--r-full); background: var(--chip); color: var(--muted);
+  font-weight: 600; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+ol.todos .t { font-weight: 600; margin-right: 8px; }
+ol.todos .b { color: var(--muted); font-size: 13px; margin-top: 4px; }
+/* A segmented control, not an underlined tab strip. */
+.tabs { display: inline-flex; flex-wrap: wrap; gap: 2px; margin: 32px 0 0; padding: 2px;
+  background: var(--chip); border-radius: var(--r-full); }
+.tabs button { background: none; border: none; border-radius: var(--r-full); color: var(--muted);
+  font: inherit; font-weight: 600; font-size: 13px; padding: 6px 14px; cursor: pointer; }
+.tabs button:hover { color: var(--fg); }
+.tabs button[aria-selected="true"] { color: var(--fg); background: var(--panel3);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.32); }
+.tabs .badge { margin-left: 7px; padding: 1px 7px; border-radius: var(--r-full); background: var(--chip);
+  color: var(--muted); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tabs button[aria-selected="true"] .badge { color: var(--fg); }
+.tab-panel > h2:first-child { margin-top: 24px; border-bottom: none; padding-bottom: 0; }
+</style></head><body>
+<div class="head"><span class="proj">demo</span>
+<span>test suite performance · 2026-01-01 09:00 · 6 tests · 4 passed, 1 failed, 1 skipped · 2 xdist workers · Python 3.13.0 · pytest 9.0.0</span></div>
+
+
+<h1 class="hero" title="End-to-end clock for the whole run, including per-process startup and collection (paid once per xdist worker).">5.00s</h1>
+<div class="legend"><span class="legend-item"><span class="swatch" style="background:var(--series-5)"></span>startup, imports <span class="v">1.00s</span></span><span class="legend-item"><span class="swatch" style="background:var(--series-1)"></span>collection <span class="v">500ms</span></span><span class="legend-item"><span class="swatch" style="background:var(--series-3)"></span>session fixtures <span class="v">1.58s</span></span><span class="legend-item"><span class="swatch" style="background:var(--chip)"></span>orchestration <span class="v">1.92s</span></span></div><div class="phasebar"><span class="seg" style="width:20.00%;background:var(--series-5)" title="startup, imports: 1.00s (20.0%)"></span><span class="seg" style="width:10.00%;background:var(--series-1)" title="collection: 500ms (10.0%)"></span><span class="seg" style="width:31.51%;background:var(--series-3)" title="session fixtures: 1.58s (31.5%)"></span><span class="seg" style="width:38.49%;background:var(--chip)" title="orchestration: 1.92s (38.5%)"></span></div>
+
+<div class="cards"><div class="card" title="Sum of per-test wall time across all workers — total work done, ignoring parallelism."><div class="n">3.15s</div><div class="l">aggregate test time</div></div><div class="card" title="Half of all tests finish within this."><div class="n">150ms</div><div class="l">median test</div></div><div class="card" title="Statements observed by the ORM-level probes during tests (plus any outside-of-test work, noted in the DB tab)."><div class="n">36</div><div class="l">DB queries (postgresql)</div></div><div class="card" title="Memory high-water mark; it never comes back down, so one hungry test sets the floor for the whole worker."><div class="n">512.0MB</div><div class="l">peak RSS / process</div></div></div>
+<div class="strip"><span>GC <span class="v">200ms</span></span><span>other CPU <span class="v">1.69s</span></span><span>other wait <span class="v">345ms</span></span><span>HTTP <span class="v">2 · 200ms</span></span><span>file opens <span class="v">400</span></span><span>time.sleep() <span class="v">400ms</span></span><span>parallel efficiency <span class="v">39%</span></span><span>disk read / written <span class="v">10.0MB / 2.0MB</span></span></div>
+
+<div class="callout bad"><strong>1 test failing.</strong> Performance notes below still apply, but green comes first.</div>
+
+<div class="tabs" role="tablist"><button data-tab="overview" aria-selected="false">Overview</button><button data-tab="tests" aria-selected="false">Tests<span class="badge">6</span></button><button data-tab="startup" aria-selected="false">Startup</button><button data-tab="fixtures" aria-selected="false">Fixtures</button><button data-tab="db" aria-selected="false">DB<span class="badge">36</span></button><button data-tab="cpu" aria-selected="false">CPU</button><button data-tab="http" aria-selected="false">HTTP<span class="badge">2</span></button><button data-tab="files" aria-selected="false">Files<span class="badge">400</span></button><button data-tab="warnings" aria-selected="false">Warnings<span class="badge">43</span></button></div>
+<section class="tab-panel" data-tab="overview" hidden>
+<h2>Run timeline</h2>
+<div class="tl-row"><div class="tl-label">main</div><div class="lane"><div class="seg" style="left:0.00%;width:20.00%;background:var(--series-5)" title="startup (imports, est.): 1.00s"></div><div class="seg" style="left:20.00%;width:10.00%;background:var(--series-1)" title="collection: 500ms"></div><div class="seg" style="left:30.00%;width:70.00%;background:var(--chip)" title="orchestrating workers: 3.50s"></div></div></div><div class="tl-row"><div class="tl-label">gw0</div><div class="lane"><div class="seg" style="left:4.00%;width:20.00%;background:var(--series-5)" title="startup (imports, est.): 1.00s"></div><div class="seg" style="left:24.00%;width:10.00%;background:var(--series-1)" title="collection: 500ms"></div><div class="seg" style="left:34.00%;width:2.00%;background:var(--chip)" title="waiting / scheduling: 100ms"></div><div class="seg" style="left:36.00%;width:40.00%;background:var(--series-3)" title="session setup (first test): 2.00s"></div><div class="seg" style="left:76.00%;width:14.00%;background:var(--series-2)" title="tests: 700ms"></div><div class="seg" style="left:90.00%;width:4.00%;background:var(--faint)" title="teardown + reporting: 200ms"></div></div></div><div class="tl-row"><div class="tl-label">gw1</div><div class="lane"><div class="seg" style="left:4.00%;width:20.00%;background:var(--series-5)" title="startup (imports, est.): 1.00s"></div><div class="seg" style="left:24.00%;width:10.00%;background:var(--series-1)" title="collection: 500ms"></div><div class="seg" style="left:34.00%;width:2.00%;background:var(--chip)" title="waiting / scheduling: 100ms"></div><div class="seg" style="left:36.00%;width:40.00%;background:var(--series-3)" title="session setup (first test): 2.00s"></div><div class="seg" style="left:76.00%;width:10.00%;background:var(--series-2)" title="tests: 500ms"></div><div class="seg" style="left:86.00%;width:6.00%;background:var(--faint)" title="teardown + reporting: 300ms"></div></div></div><div class="tl-axis"><span>0s</span><span>5.00s</span></div><div class="legend"><span class="legend-item"><span class="swatch" style="background:var(--series-5)"></span>startup (imports, est.)</span><span class="legend-item"><span class="swatch" style="background:var(--series-1)"></span>collection</span><span class="legend-item"><span class="swatch" style="background:var(--chip)"></span>waiting / scheduling</span><span class="legend-item"><span class="swatch" style="background:var(--series-3)"></span>session setup (first test)</span><span class="legend-item"><span class="swatch" style="background:var(--series-2)"></span>tests</span><span class="legend-item"><span class="swatch" style="background:var(--faint)"></span>teardown + reporting</span><span class="legend-item"><span class="swatch" style="background:var(--chip)"></span>orchestrating workers</span></div>
+<h2>Where the time went</h2>
+<div class="proportion"><span style="width:10.00%;background:var(--series-1)" title="DB: 315ms (10.0%)"></span><span style="width:6.35%;background:var(--series-5)" title="HTTP (real): 200ms (6.3%)"></span><span style="width:12.69%;background:var(--series-4)" title="sleep: 400ms (12.7%)"></span><span style="width:6.35%;background:var(--series-3)" title="GC: 200ms (6.3%)"></span><span style="width:53.65%;background:var(--series-2)" title="other CPU: 1.69s (53.7%)"></span><span style="width:10.96%;background:var(--faint)" title="other wait: 345ms (11.0%)"></span></div><div class="legend"><span class="legend-item"><span class="swatch" style="background:var(--series-1)"></span>DB <span class="v">315ms · 10%</span></span><span class="legend-item"><span class="swatch" style="background:var(--series-5)"></span>HTTP (real) <span class="v">200ms · 6%</span></span><span class="legend-item"><span class="swatch" style="background:var(--series-4)"></span>sleep <span class="v">400ms · 13%</span></span><span class="legend-item"><span class="swatch" style="background:var(--series-3)"></span>GC <span class="v">200ms · 6%</span></span><span class="legend-item"><span class="swatch" style="background:var(--series-2)"></span>other CPU <span class="v">1.69s · 54%</span></span><span class="legend-item"><span class="swatch" style="background:var(--faint)"></span>other wait <span class="v">345ms · 11%</span></span></div>
+<h2>Vs baseline (2025-12-31 09:00)</h2><div class="sub">2 tests present in both runs.</div><table><thead><tr><th>metric</th><th class="num sortable">baseline</th><th class="num sortable">this run</th><th class="num sortable">Δ</th></tr></thead><tbody><tr><td>tests</td><td class="num" data-v="5">5</td><td class="num" data-v="6">6</td><td class="num trend bad" data-v="1">▲ 1 (+20%)</td></tr><tr><td>aggregate test time</td><td class="num" data-v="2.0">2.00s</td><td class="num" data-v="3.151">3.15s</td><td class="num trend bad" data-v="1.1509999999999998">▲ 1.15s (+58%)</td></tr><tr><td>CPU time</td><td class="num" data-v="1.8905999999999998">1.89s</td><td class="num" data-v="1.8905999999999998">1.89s</td><td class="num trend flat" data-v="0">—</td></tr><tr><td>DB queries</td><td class="num" data-v="120">120</td><td class="num" data-v="36">36</td><td class="num trend good" data-v="-84">▼ 84 (-70%)</td></tr><tr><td>in-DB time</td><td class="num" data-v="0.3151">315ms</td><td class="num" data-v="0.3151">315ms</td><td class="num trend flat" data-v="0">—</td></tr><tr><td>HTTP calls</td><td class="num" data-v="2">2</td><td class="num" data-v="2">2</td><td class="num trend flat" data-v="0">—</td></tr><tr><td>sleep time</td><td class="num" data-v="0.4">400ms</td><td class="num" data-v="0.4">400ms</td><td class="num trend flat" data-v="0">—</td></tr><tr><td>file opens</td><td class="num" data-v="400">400</td><td class="num" data-v="400">400</td><td class="num trend flat" data-v="0">—</td></tr><tr><td>suite wall time</td><td class="num" data-v="4.0">4.00s</td><td class="num" data-v="4.0">4.00s</td><td class="num trend flat" data-v="0">—</td></tr></tbody></table><p class="subhead">Biggest query-shape changes</p><table><thead><tr><th>query shape</th><th class="num sortable">baseline</th><th class="num sortable">this run</th><th class="num sortable">Δ</th></tr></thead><tbody><tr><td><code>SELECT &quot;u&quot;.&quot;id&quot; FROM &quot;u&quot; WHERE &quot;u&quot;.&quot;id&quot; = ?</code></td><td class="num" data-v="80">80</td><td class="num" data-v="120">120</td><td class="num trend bad" data-v="40">▲ 40</td></tr><tr><td><code>INSERT INTO &quot;u&quot; (?) VALUES (?)</code> <span class="pill warn">new</span></td><td class="num" data-v="0">0</td><td class="num" data-v="30">30</td><td class="num trend bad" data-v="30">▲ 30</td></tr><tr><td><code>DELETE FROM old</code> <span class="pill good">gone</span></td><td class="num" data-v="5">5</td><td class="num" data-v="0">0</td><td class="num trend good" data-v="-5">▼ 5</td></tr></tbody></table><p class="subhead">Slowest test regressions</p><table><thead><tr><th>test</th><th class="num sortable">baseline</th><th class="num sortable">this run</th><th class="num sortable">Δ</th></tr></thead><tbody><tr><td class="test"><code class="tid" title="tests/test_b.py::TestX::test_slow"><span class="tid-path">tests/test_b.py::TestX::</span><span class="tid-name">test_slow</span></code></td><td class="num" data-v="1.0">1.00s</td><td class="num" data-v="2.5">2.50s</td><td class="num trend bad" data-v="1.5">▲ 1.50s (+150%)</td></tr></tbody></table>
+</section><section class="tab-panel" data-tab="tests" hidden>
+<h2>Test duration distribution</h2>
+<div class="barchart"><div class="bar-row"><div class="bl">≤1ms</div><div class="bar-track"><div class="bar-fill" style="width:50.0%"></div></div><div class="bv">1</div></div><div class="bar-row"><div class="bl">≤3ms</div><div class="bar-track"><div class="bar-fill" style="width:0.0%"></div></div><div class="bv">0</div></div><div class="bar-row"><div class="bl">≤10ms</div><div class="bar-track"><div class="bar-fill" style="width:0.0%"></div></div><div class="bv">0</div></div><div class="bar-row"><div class="bl">≤30ms</div><div class="bar-track"><div class="bar-fill" style="width:0.0%"></div></div><div class="bv">0</div></div><div class="bar-row"><div class="bl">≤0.1s</div><div class="bar-track"><div class="bar-fill" style="width:100.0%"></div></div><div class="bv">2</div></div><div class="bar-row"><div class="bl">≤0.3s</div><div class="bar-track"><div class="bar-fill" style="width:100.0%"></div></div><div class="bv">2</div></div><div class="bar-row"><div class="bl">≤1s</div><div class="bar-track"><div class="bar-fill" style="width:0.0%"></div></div><div class="bv">0</div></div><div class="bar-row"><div class="bl">≤3s</div><div class="bar-track"><div class="bar-fill" style="width:50.0%"></div></div><div class="bv">1</div></div><div class="bar-row"><div class="bl">≤10s</div><div class="bar-track"><div class="bar-fill" style="width:0.0%"></div></div><div class="bv">0</div></div><div class="bar-row"><div class="bl">&gt;10s</div><div class="bar-track"><div class="bar-fill" style="width:0.0%"></div></div><div class="bv">0</div></div></div>
+<div class="note" style="margin-top:14px">p50 150ms · p90 1.40s · p99 2.39s · mean 525ms</div>
+<h2>Failures</h2><details><summary><span class="pill bad">failed</span> <code class="tid" title="tests/test_a.py::test_p[two]"><span class="tid-path">tests/test_a.py::</span><span class="tid-name">test_p</span></code><span class="param" title="two">two</span> · 200ms</summary><pre>AssertionError: boom</pre></details>
+<h2 class="row">Tests<button class="rowtoggle" id="group-toggle" aria-pressed="true">Group parametrized cases</button></h2>
+<table id="tests-table"><thead><tr><th>test</th><th class="num sortable">wall</th><th class="num sortable">setup</th><th class="num sortable">call</th><th class="num sortable">cpu</th><th class="num sortable">queries</th><th class="num sortable">db</th><th class="num sortable">http</th></tr></thead><tbody><tr><td class="test"><code class="tid" title="tests/test_b.py::TestX::test_slow"><span class="tid-path">tests/test_b.py::TestX::</span><span class="tid-name">test_slow</span></code>  <span class="pill neutral" title="First test in its process: pytest charges all session-scoped fixture setup (DB creation, cache warming) to this test's setup phase.">includes session setup</span></td><td class="num" data-v="2.5">2.50s</td><td class="num" data-v="2.0">2.00s</td><td class="num" data-v="1.75">1.75s</td><td class="num" data-v="1.5">1.50s</td><td class="num" data-v="4">4</td><td class="num" data-v="0.25">250ms</td><td class="num" data-v="2">2</td></tr><tr class="fam" data-fam="1"><td class="test"><span class="caret">▸</span> <code class="tid" title="tests/test_a.py::test_p"><span class="tid-path">tests/test_a.py::</span><span class="tid-name">test_p</span></code> <span class="pill neutral">3 cases</span> <span class="pill bad">1 failed</span></td><td class="num" data-v="0.6">600ms</td><td class="num" data-v="0.12000000000000001">120ms</td><td class="num" data-v="0.42">420ms</td><td class="num" data-v="0.36">360ms</td><td class="num" data-v="12">12</td><td class="num" data-v="0.060000000000000005">60ms</td><td class="num" data-v="0">0</td></tr><tr class="case" data-fam="1"><td class="test"><code class="tid" title="tests/test_a.py::test_p[one]"><span class="tid-path">tests/test_a.py::</span><span class="tid-name">test_p</span></code><span class="param" title="one">one</span> </td><td class="num" data-v="0.3">300ms</td><td class="num" data-v="0.06">60ms</td><td class="num" data-v="0.21">210ms</td><td class="num" data-v="0.18">180ms</td><td class="num" data-v="4">4</td><td class="num" data-v="0.03">30ms</td><td class="num" data-v="0">0</td></tr><tr class="case" data-fam="1"><td class="test"><code class="tid" title="tests/test_a.py::test_p[two]"><span class="tid-path">tests/test_a.py::</span><span class="tid-name">test_p</span></code><span class="param" title="two">two</span> <span class="pill bad">failed</span></td><td class="num" data-v="0.2">200ms</td><td class="num" data-v="0.04000000000000001">40ms</td><td class="num" data-v="0.13999999999999999">140ms</td><td class="num" data-v="0.12">120ms</td><td class="num" data-v="4">4</td><td class="num" data-v="0.020000000000000004">20ms</td><td class="num" data-v="0">0</td></tr><tr class="case" data-fam="1"><td class="test"><code class="tid" title="tests/test_a.py::test_p[three]"><span class="tid-path">tests/test_a.py::</span><span class="tid-name">test_p</span></code><span class="param" title="three">three</span> </td><td class="num" data-v="0.1">100ms</td><td class="num" data-v="0.020000000000000004">20ms</td><td class="num" data-v="0.06999999999999999">70ms</td><td class="num" data-v="0.06">60ms</td><td class="num" data-v="4">4</td><td class="num" data-v="0.010000000000000002">10ms</td><td class="num" data-v="0">0</td></tr><tr><td class="test"><code class="tid" title="tests/test_b.py::test_flaky"><span class="tid-path">tests/test_b.py::</span><span class="tid-name">test_flaky</span></code> </td><td class="num" data-v="0.05">50ms</td><td class="num" data-v="0.010000000000000002">10ms</td><td class="num" data-v="0.034999999999999996">35ms</td><td class="num" data-v="0.03">30ms</td><td class="num" data-v="4">4</td><td class="num" data-v="0.005000000000000001">5ms</td><td class="num" data-v="0">0</td></tr><tr><td class="test"><code class="tid" title="tests/test_c.py::test_skip"><span class="tid-path">tests/test_c.py::</span><span class="tid-name">test_skip</span></code> <span class="pill neutral">skipped</span></td><td class="num" data-v="0.001">1ms</td><td class="num" data-v="0.0002">0ms</td><td class="num" data-v="0.0007">1ms</td><td class="num" data-v="0.0006">1ms</td><td class="num" data-v="4">4</td><td class="num" data-v="0.0001">0ms</td><td class="num" data-v="0">0</td></tr></tbody></table>
+</section><section class="tab-panel" data-tab="startup" hidden><h2>Slowest test modules to collect</h2><table><thead><tr><th>module</th><th class="num sortable">collect time</th></tr></thead><tbody><tr><td><span class="bar" style="width:120px"></span> <code>tests/test_a.py</code></td><td class="num" data-v="0.3">300ms</td></tr><tr><td><span class="bar" style="width:20px"></span> <code>tests/test_b.py</code></td><td class="num" data-v="0.05">50ms</td></tr></tbody></table><h2>Heaviest startup imports</h2><table><thead><tr><th>module</th><th class="num sortable">self</th><th class="num sortable">cumulative</th></tr></thead><tbody><tr><td><span class="bar" style="width:120px"></span> <code>django</code></td><td class="num" data-v="0.4">400ms</td><td class="num" data-v="0.9">900ms</td></tr><tr><td><span class="bar" style="width:60px"></span> <code>app.settings</code></td><td class="num" data-v="0.2">200ms</td><td class="num" data-v="0.6">600ms</td></tr></tbody></table></section><section class="tab-panel" data-tab="fixtures" hidden><h2>Costliest fixtures (setup time)</h2><table><thead><tr><th>fixture</th><th class="num sortable">total</th><th class="num sortable">self</th><th class="num sortable">setups</th><th class="num sortable">mean</th><th class="num sortable">max</th><th class="num sortable">queries</th></tr></thead><tbody><tr><td><span class="bar" style="width:120px"></span> <code>db</code> <span class="pill neutral">session</span></td><td class="num" data-v="2.0">2.00s</td><td class="num" data-v="1.8">1.80s</td><td class="num" data-v="6">6</td><td class="num" data-v="0.3333333333333333">333ms</td><td class="num" data-v="1.9">1.90s</td><td class="num" data-v="20">20 (8w)</td></tr><tr><td><span class="bar" style="width:18px"></span> <code>clear_cache</code> <span class="pill warn" title="Runs for every test in scope">autouse</span></td><td class="num" data-v="0.3">300ms</td><td class="num" data-v="0.3">300ms</td><td class="num" data-v="6">6</td><td class="num" data-v="0.049999999999999996">50ms</td><td class="num" data-v="0.08">80ms</td><td class="num" data-v="0">—</td></tr></tbody></table><h2>Per-test taxes (autouse fixtures)</h2><table><thead><tr><th>fixture</th><th class="num sortable">self total</th><th class="num sortable">runs</th><th class="num sortable">per run</th><th class="num sortable">queries</th></tr></thead><tbody><tr><td><code>clear_cache</code></td><td class="num" data-v="0.3">300ms</td><td class="num" data-v="6">6</td><td class="num" data-v="49.99999999999999">50.00ms</td><td class="num" data-v="0">—</td></tr></tbody></table></section><section class="tab-panel" data-tab="db" hidden><h2>Top query shapes by count</h2><div class="sub">2 distinct shapes · 36 queries total · 12 ran outside tests (migrations/fixtures/teardown, 50ms)</div><table><thead><tr><th>query shape</th><th class="num sortable">count</th><th class="num sortable">% of queries</th><th class="num sortable">db time</th><th class="num sortable">tests</th><th class="num sortable">max / test</th></tr></thead><tbody><tr><td><code title="SELECT &quot;u&quot;.&quot;id&quot; FROM &quot;u&quot; WHERE &quot;u&quot;.&quot;id&quot; = 1">SELECT &quot;u&quot;.&quot;id&quot; FROM &quot;u&quot; WHERE &quot;u&quot;.&quot;id&quot; = ?</code><div class="note">↳ app/models.py:42 (100×) · peak 40× in <code>tests/test_a.py::test_p[one]</code></div></td><td class="num" data-v="120">120</td><td class="num" data-v="0.8">80.0%</td><td class="num" data-v="0.3">300ms</td><td class="num" data-v="3">3</td><td class="num" data-v="40">40</td></tr><tr><td><code title="INSERT INTO &quot;u&quot; (name) VALUES (&#x27;x&#x27;)">INSERT INTO &quot;u&quot; (?) VALUES (?)</code><div class="note">↳ first issued from tests/conftest.py:9</div></td><td class="num" data-v="30">30</td><td class="num" data-v="0.2">20.0%</td><td class="num" data-v="0.05">50ms</td><td class="num" data-v="6">6</td><td class="num" data-v="5">5</td></tr></tbody></table><h2>Top query shapes by total DB time</h2><table><thead><tr><th>query shape</th><th class="num sortable">count</th><th class="num sortable">% of queries</th><th class="num sortable">db time</th><th class="num sortable">tests</th><th class="num sortable">max / test</th></tr></thead><tbody><tr><td><code title="SELECT &quot;u&quot;.&quot;id&quot; FROM &quot;u&quot; WHERE &quot;u&quot;.&quot;id&quot; = 1">SELECT &quot;u&quot;.&quot;id&quot; FROM &quot;u&quot; WHERE &quot;u&quot;.&quot;id&quot; = ?</code><div class="note">↳ app/models.py:42 (100×) · peak 40× in <code>tests/test_a.py::test_p[one]</code></div></td><td class="num" data-v="120">120</td><td class="num" data-v="0.8">80.0%</td><td class="num" data-v="0.3">300ms</td><td class="num" data-v="3">3</td><td class="num" data-v="40">40</td></tr><tr><td><code title="INSERT INTO &quot;u&quot; (name) VALUES (&#x27;x&#x27;)">INSERT INTO &quot;u&quot; (?) VALUES (?)</code><div class="note">↳ first issued from tests/conftest.py:9</div></td><td class="num" data-v="30">30</td><td class="num" data-v="0.2">20.0%</td><td class="num" data-v="0.05">50ms</td><td class="num" data-v="6">6</td><td class="num" data-v="5">5</td></tr></tbody></table><h2>N+1 suspects (same shape ≥25× within one test)</h2><table><thead><tr><th>query shape</th><th class="num sortable">count</th><th class="num sortable">% of queries</th><th class="num sortable">db time</th><th class="num sortable">tests</th><th class="num sortable">max / test</th></tr></thead><tbody><tr><td><code title="SELECT &quot;u&quot;.&quot;id&quot; FROM &quot;u&quot; WHERE &quot;u&quot;.&quot;id&quot; = 1">SELECT &quot;u&quot;.&quot;id&quot; FROM &quot;u&quot; WHERE &quot;u&quot;.&quot;id&quot; = ?</code><div class="note">↳ app/models.py:42 (100×) · peak 40× in <code>tests/test_a.py::test_p[one]</code></div></td><td class="num" data-v="120">120</td><td class="num" data-v="0.8">80.0%</td><td class="num" data-v="0.3">300ms</td><td class="num" data-v="3">3</td><td class="num" data-v="40">40</td></tr></tbody></table></section><section class="tab-panel" data-tab="cpu" hidden><h2>Where the CPU went (cProfile)</h2><table><thead><tr><th>function</th><th class="num sortable">self time</th><th class="num sortable">% of profiled</th><th class="num sortable">calls</th></tr></thead><tbody><tr><td><code>app/models.py:10:save</code></td><td class="num" data-v="0.9">900ms</td><td class="num" data-v="0.9">90.0%</td><td class="num" data-v="300">300</td></tr><tr><td><code>&lt;built-in method builtins.len&gt;</code></td><td class="num" data-v="0.1">100ms</td><td class="num" data-v="0.1">10.0%</td><td class="num" data-v="9000">9,000</td></tr></tbody></table></section><section class="tab-panel" data-tab="http" hidden><h2>HTTP calls by host</h2><table><thead><tr><th>host</th><th class="num sortable">calls</th><th class="num sortable">time</th><th class="num sortable">mean</th><th>transport</th></tr></thead><tbody><tr><td><code>api.example.com</code></td><td class="num" data-v="2">2</td><td class="num" data-v="0.2">200ms</td><td class="num" data-v="0.1">100ms</td><td><span class="pill warn">real socket</span></td></tr><tr><td><code>mock.local</code></td><td class="num" data-v="5">5</td><td class="num" data-v="0.01">10ms</td><td class="num" data-v="0.002">2ms</td><td><span class="pill good">mocked / in-process</span></td></tr></tbody></table><h2>Socket connections</h2><table><thead><tr><th>endpoint</th><th class="num sortable">connects</th><th class="num sortable">connect time</th><th>kind</th></tr></thead><tbody><tr><td><code>93.184.216.34:443</code></td><td class="num" data-v="2">2</td><td class="num" data-v="0.05">50ms</td><td><span class="pill bad">external</span></td></tr><tr><td><code>127.0.0.1:5432</code></td><td class="num" data-v="3">3</td><td class="num" data-v="0.002">2ms</td><td><span class="pill good">loopback</span></td></tr></tbody></table></section><section class="tab-panel" data-tab="files" hidden><h2>Most-opened files</h2><table><thead><tr><th>path</th><th class="num sortable">opens</th><th class="num sortable">≈ re-read</th></tr></thead><tbody><tr><td><span class="bar" style="width:120px"></span> <code>fixtures/big.json</code></td><td class="num" data-v="12">12</td><td class="num" data-v="25165824">24.0MB</td></tr><tr><td><span class="bar" style="width:30px"></span> <code>settings.toml</code></td><td class="num" data-v="3">3</td><td class="num" data-v="0">—</td></tr></tbody></table></section><section class="tab-panel" data-tab="warnings" hidden><h2>Warnings</h2><table><thead><tr><th>warning (43 total)</th><th class="num sortable">count</th></tr></thead><tbody><tr><td><code>DeprecationWarning</code> old thing</td><td class="num" data-v="40">40</td></tr><tr><td><code>ResourceWarning</code> unclosed file</td><td class="num" data-v="3">3</td></tr></tbody></table></section>
+
+<h2>What to do about it</h2>
+<ol class="todos"><li><span class="pill bad">high</span> <span class="t">1 flaky test needed reruns to pass</span><div class="b">Reruns hide real race conditions and tax every run: tests/test_b.py::test_flaky (2×). Make them deterministic (frozen time, seeded randomness, event-driven waits) rather than retrying.</div></li><li><span class="pill bad">high</span> <span class="t">Fix the 1 failing test</span><div class="b">Nothing below matters until the suite is green: tests/test_a.py::test_p[two].</div></li><li><span class="pill bad">high</span> <span class="t">Tests are talking to the real network</span><div class="b">2 socket connection(s) left the machine (93.184.216.34:443). Real network calls make tests slow, flaky, and dependent on third-party uptime. Mock them (responses/respx/vcrpy) and enforce hermeticity with pytest-socket.</div></li><li><span class="pill warn">medium</span> <span class="t">Probable N+1 queries: 1 query shape(s) repeat ≥25× inside a single test</span><div class="b">Worst: SELECT on u runs up to 40× in one test (in tests/test_a.py::test_p[one]) — 120 times suite-wide. Batch it (select_related/prefetch_related, joins, or bulk fetches) — that usually speeds up production too.</div></li><li><span class="pill neutral">low</span> <span class="t">1 tests (17%) are skipped</span><div class="b">Skips silently stop protecting you. Re-enable what can run, delete what can&#x27;t, and put a reason + owner on the rest.</div></li><li><span class="pill neutral">low</span> <span class="t">1 test(s) raised peak memory by &gt;100MB</span><div class="b">Worst: tests/test_b.py::TestX::test_slow (+150.0MB). Peak RSS never comes back down, so one hungry test sets the memory floor for the whole worker — stream instead of materializing, or shrink the fixture data.</div></li><li><span class="pill neutral">low</span> <span class="t">400 file opens (~67 per test)</span><div class="b">Re-reading the same file is cheap to cache at module or session scope. Start with fixtures/big.json: 12 opens × 2.0MB ≈ 24.0MB re-read.</div></li></ol>
+
+<div class="footer">Generated 2026-01-01 09:05 by pytest-perf-report ·
+command: <code>pytest --perf-report -n 2</code></div>
+<script>function sortTable(table, idx, dir) {
+  var tbody = table.tBodies[0];
+  var rows = Array.prototype.slice.call(tbody.rows);
+  function value(row) {
+    var cell = row.cells[idx];
+    return (cell && parseFloat(cell.dataset.v || cell.textContent)) || 0;
+  }
+  function cmp(a, b) { return dir === 'desc' ? value(b) - value(a) : value(a) - value(b); }
+  table.dataset.sortIdx = idx;
+  table.dataset.sortDir = dir;
+  // Grouped: order the family/solo rows, then re-attach each family's cases
+  // under it. Ungrouped: one flat order over the cases, families parked last.
+  var grouped = !table.classList.contains('ungrouped');
+  var heads = rows.filter(function (r) {
+    return grouped ? !r.classList.contains('case') : !r.classList.contains('fam');
+  });
+  var cases = {};
+  rows.forEach(function (r) {
+    if (grouped && r.classList.contains('case')) {
+      (cases[r.dataset.fam] = cases[r.dataset.fam] || []).push(r);
+    }
+  });
+  heads.sort(cmp);
+  heads.forEach(function (head) {
+    tbody.appendChild(head);
+    var kids = cases[head.dataset.fam];
+    if (kids) { kids.sort(cmp); kids.forEach(function (k) { tbody.appendChild(k); }); }
+  });
+  if (!grouped) {
+    rows.forEach(function (r) { if (r.classList.contains('fam')) tbody.appendChild(r); });
+  }
+}
+document.querySelectorAll('th.sortable').forEach(function (th) {
+  th.addEventListener('click', function () {
+    var table = th.closest('table');
+    var dir = th.dataset.dir === 'desc' ? 'asc' : 'desc';
+    table.querySelectorAll('th.sortable').forEach(function (h) { delete h.dataset.dir; });
+    th.dataset.dir = dir;
+    sortTable(table, Array.prototype.indexOf.call(th.parentNode.children, th), dir);
+  });
+});
+(function () {
+  var table = document.getElementById('tests-table');
+  if (!table) return;
+  var toggle = document.getElementById('group-toggle');
+  var rows = Array.prototype.slice.call(table.tBodies[0].rows);
+  var families = {};
+  rows.forEach(function (r) { if (r.classList.contains('fam')) families[r.dataset.fam] = r; });
+  function apply() {
+    var grouped = !table.classList.contains('ungrouped');
+    rows.forEach(function (r) {
+      if (r.classList.contains('fam')) {
+        r.hidden = !grouped;
+      } else if (r.classList.contains('case')) {
+        var family = families[r.dataset.fam];
+        r.hidden = grouped && !family.classList.contains('open');
+      }
+    });
+  }
+  Object.keys(families).forEach(function (key) {
+    var family = families[key];
+    family.addEventListener('click', function () {
+      family.classList.toggle('open');
+      family.querySelector('.caret').textContent =
+        family.classList.contains('open') ? '▾' : '▸';
+      apply();
+    });
+  });
+  toggle.addEventListener('click', function () {
+    var grouped = !table.classList.toggle('ungrouped');
+    toggle.setAttribute('aria-pressed', String(grouped));
+    sortTable(table, Number(table.dataset.sortIdx || 1), table.dataset.sortDir || 'desc');
+    apply();
+  });
+  apply();
+})();
+var tabs = document.querySelectorAll('.tabs button');
+function selectTab(name) {
+  tabs.forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.tab === name)); });
+  document.querySelectorAll('.tab-panel').forEach(function (p) { p.hidden = p.dataset.tab !== name; });
+}
+tabs.forEach(function (b) { b.addEventListener('click', function () { selectTab(b.dataset.tab); }); });
+if (tabs.length) selectTab(tabs[0].dataset.tab);
+</script>
+</body></html>

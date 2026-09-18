@@ -3,4 +3,6 @@
 #MISE sources=["src/**/*.py", "tests/**/*.py", "pyproject.toml"]
 set -euo pipefail
 
-uv run pytest "$@"
+cd "$(dirname "$0")/.."
+
+uv run --frozen pytest "$@"

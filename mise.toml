@@ -1,0 +1,2 @@
+# Intentionally empty: this file marks the project root so `mise run <task>`
+# finds the scripts in mise-tasks/.
