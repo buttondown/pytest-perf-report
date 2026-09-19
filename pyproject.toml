@@ -1,6 +1,6 @@
 [project]
 name = "pytest-perf-report"
-version = "0.3.0"
+version = "0.4.0"
 description = "An opinionated, self-contained performance report for your pytest suite: time, CPU, database, HTTP, sleeps, files, and a prioritized TODO list."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -17,6 +17,9 @@ dependencies = ["pytest>=7.0"]
 
 [project.urls]
 Homepage = "https://github.com/buttondown/pytest-perf-report"
+
+[project.scripts]
+pytest-perf-report = "pytest_perf_report.cli:main"
 
 [project.entry-points.pytest11]
 perf_report = "pytest_perf_report.plugin"
@@ -42,6 +45,7 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 88
+src = ["src", "tests"]
 lint.ignore = ["E501"]
 lint.select = ["F", "E", "W", "I001", "UP"]
 target-version = "py310"

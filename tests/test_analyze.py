@@ -71,6 +71,30 @@ def test_compute_totals():
     assert 0 < stats["db_share"] < 1
 
 
+def test_phases_account_for_the_whole_clock():
+    merged = make_merged(
+        suite={
+            "wall_s": 5.0,
+            "startup_collect_s": 1.4,
+            "startup_preconfigure_s": 0.4,
+            "startup_collection_s": 1.0,
+            "workers": 0,
+        },
+        lanes=[{"first_test_setup_s": 0.5}],
+    )
+    stats = compute(merged)
+    phases = dict(stats["phases"])
+    assert phases["startup, imports"] == 0.4
+    assert phases["collection"] == 1.0
+    assert phases["session fixtures"] == 0.5
+    # 30 tests × 0.1s, less the session fixture setup billed to the first one.
+    assert abs(phases["test bodies"] - 2.5) < 1e-6
+    # suite wall starts at pytest_configure, so orchestration is the part of it
+    # the other phases don't explain and startup sits outside it entirely.
+    assert abs(phases["orchestration"] - 1.0) < 1e-6
+    assert abs(stats["total_wall_s"] - 5.4) < 1e-6
+
+
 def test_healthy_suite_gets_a_single_benign_todo():
     todos = build_todos(make_merged(), compute(make_merged()))
     assert len(todos) == 1

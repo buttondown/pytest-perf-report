@@ -13,7 +13,11 @@ import os
 from collections import Counter
 from typing import Any
 
-from pytest_perf_report.runtime import MAX_ORIGINS_PER_SHAPE, SessionState
+from pytest_perf_report.runtime import (
+    MAX_ORIGINS_PER_SHAPE,
+    SessionState,
+    new_fixture_row,
+)
 
 SCHEMA_VERSION = 3
 MAX_FILE_ROWS = 500
@@ -26,6 +30,11 @@ MAX_STARTUP_IMPORT_ROWS = 200
 
 
 def state_to_shard(state: SessionState) -> dict[str, Any]:
+    collect_s = (
+        max(0.0, state.t_collect_done - state.t_configure)
+        if state.t_collect_done
+        else 0.0
+    )
     return {
         "schema": SCHEMA_VERSION,
         "shard_id": state.shard_id,
@@ -36,22 +45,9 @@ def state_to_shard(state: SessionState) -> dict[str, Any]:
             # Interpreter boot + plugin/conftest imports happen before
             # pytest_configure can start a wall clock; process CPU up to that
             # point is the closest portable measure of them.
-            "startup_collect_s": round(
-                state.preconfigure_cpu
-                + (
-                    max(0.0, state.t_collect_done - state.t_configure)
-                    if state.t_collect_done
-                    else 0.0
-                ),
-                6,
-            ),
+            "startup_collect_s": round(state.preconfigure_cpu + collect_s, 6),
             "preconfigure_cpu_s": round(state.preconfigure_cpu, 6),
-            "collect_s": round(
-                max(0.0, state.t_collect_done - state.t_configure)
-                if state.t_collect_done
-                else 0.0,
-                6,
-            ),
+            "collect_s": round(collect_s, 6),
             "collect_modifyitems_s": round(state.collect_modifyitems_s, 6),
             "epoch_configure": state.epoch_configure,
             "epoch_collect_done": state.epoch_collect_done,
@@ -259,18 +255,7 @@ def merge_shards(shards: list[dict[str, Any]]) -> dict[str, Any]:
         gc_collections += shard.get("gc_collections", 0)
 
         for name, row in shard.get("fixtures", {}).items():
-            agg = fixtures.setdefault(
-                name,
-                {
-                    "total_s": 0.0,
-                    "self_s": 0.0,
-                    "count": 0,
-                    "max_s": 0.0,
-                    "db_queries": 0,
-                    "db_time_s": 0.0,
-                    "db_writes": 0,
-                },
-            )
+            agg = fixtures.setdefault(name, new_fixture_row())
             agg["total_s"] += row.get("total_s", 0.0)
             agg["self_s"] += row.get("self_s", 0.0)
             agg["count"] += row.get("count", 0)

@@ -37,6 +37,12 @@ pytest --perf-report --perf-report-json=perf.json
   a change to what the report measures should come with a test that runs a
   tiny suite and asserts on the JSON output.
 - Keep the HTML report dependency-free. No external scripts, styles, or fonts.
+  The page skeleton, stylesheet, and scripts live in
+  `src/pytest_perf_report/templates/` and are inlined at render time;
+  `report.py` renders each section and fills the skeleton. A snapshot test
+  (`tests/test_report.py`) renders a fixed dataset and compares it with
+  `tests/snapshots/report.html`; when a change to the page is intended, run
+  `UPDATE_SNAPSHOTS=1 uv run pytest tests/test_report.py` and review the diff.
 - The plugin's own suite cannot be run with `--perf-report`: its tests start
   nested pytest sessions through `pytester`, and the plugin deliberately
   leaves a nested session unprofiled while an outer profiled one is active.

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import builtins
 import functools
+import json
 import os
 import platform
 import shutil
@@ -49,6 +50,7 @@ from pytest_perf_report.analyze import (
     fmt_seconds,
 )
 from pytest_perf_report.merge import (
+    SCHEMA_VERSION,
     load_shards,
     merge_shards,
     state_to_shard,
@@ -363,8 +365,9 @@ def pytest_collection_finish(session: Any) -> None:
         state.epoch_collect_done = time.time()
 
 
-# Backstop for pathological suites; the shard caps what travels anyway.
-MAX_COLLECT_MODULE_ROWS = 20_000
+# In-memory cap on distinct modules, a backstop for pathological suites; the
+# shard caps what travels anyway (merge.MAX_COLLECT_MODULE_ROWS).
+MAX_TRACKED_COLLECT_MODULES = 20_000
 
 
 @pytest.hookimpl(hookwrapper=True)
@@ -384,7 +387,7 @@ def pytest_make_collect_report(collector: Any) -> Any:
     yield
     key = collector.nodeid or str(getattr(collector, "path", collector))
     modules = state.collect_modules
-    if key in modules or len(modules) < MAX_COLLECT_MODULE_ROWS:
+    if key in modules or len(modules) < MAX_TRACKED_COLLECT_MODULES:
         modules[key] = modules.get(key, 0.0) + (time.perf_counter() - t0)
 
 
@@ -596,7 +599,7 @@ def _resolve(path: str, state: SessionState) -> str:
 def _jsonable(
     merged: dict[str, Any], stats: dict[str, Any], todos: list[dict[str, str]]
 ) -> dict[str, Any]:
-    out = dict(merged)
+    out = {"schema": SCHEMA_VERSION, **merged}
     out["raw_http_hosts"] = sorted(merged["raw_http_hosts"])
     out["files"] = {
         **merged["files"],
@@ -667,8 +670,6 @@ def pytest_sessionfinish(session: Any, exitstatus: Any) -> None:
 
     stats = compute(merged)
 
-    import json
-
     baseline_delta = None
     if state.baseline_path:
         try:
@@ -678,11 +679,13 @@ def pytest_sessionfinish(session: Any, exitstatus: Any) -> None:
             baseline_delta = None
     todos = build_todos(merged, stats, baseline_delta)
 
+    json_abspath = None
     if state.json_path:
         out = _jsonable(merged, stats, todos)
         if baseline_delta is not None:
             out["baseline_delta"] = baseline_delta
-        with open(_resolve(state.json_path, state), "w") as f:
+        json_abspath = _resolve(state.json_path, state)
+        with open(json_abspath, "w") as f:
             json.dump(out, f, indent=1)
     html_abspath = None
     if state.html_path:
@@ -695,21 +698,31 @@ def pytest_sessionfinish(session: Any, exitstatus: Any) -> None:
     if state.owns_shard_dir:
         shutil.rmtree(state.shard_dir, ignore_errors=True)
 
-    # Stash a compact summary for pytest_terminal_summary.
+    state.summary_lines = _summary_lines(
+        stats, todos, baseline_delta, missing_workers, html_abspath, json_abspath
+    )
+
+
+def _summary_lines(
+    stats: dict[str, Any],
+    todos: list[dict[str, str]],
+    baseline_delta: dict[str, Any] | None,
+    missing_workers: int,
+    html_abspath: str | None,
+    json_abspath: str | None,
+) -> list[str]:
+    """The compact summary pytest_terminal_summary prints."""
     outcomes = stats["outcomes"]
     failed = outcomes.get("failed", 0) + outcomes.get("error", 0)
-    line1 = (
+    lines = [
         f"{stats['tests']:,} tests in {fmt_seconds(stats['suite_wall_s'])} wall"
-        f" ({fmt_seconds(stats['agg_wall_s'])} aggregate, {fmt_seconds(stats['cpu_s'])} CPU)"
-    )
-    line2 = (
+        f" ({fmt_seconds(stats['agg_wall_s'])} aggregate, {fmt_seconds(stats['cpu_s'])} CPU)",
         f"DB {stats['db_queries']:,} queries ({fmt_seconds(stats['db_time_s'])},"
         f" {stats['db_share']:.0%} of test time)"
         f" · HTTP {stats['http_calls']:,} calls ({fmt_seconds(stats['http_time_s'])})"
         f" · sleep {fmt_seconds(stats['sleep_s'])}"
-        f" · {stats['file_opens']:,} file opens"
-    )
-    state.summary_lines = [line1, line2]
+        f" · {stats['file_opens']:,} file opens",
+    ]
     if baseline_delta is not None:
         by_key = {t["key"]: t for t in baseline_delta["totals"]}
         bits = []
@@ -723,22 +736,26 @@ def pytest_sessionfinish(session: Any, exitstatus: Any) -> None:
             )
             pct = f" ({row['pct']:+.0%})" if row["pct"] is not None else ""
             bits.append(f"{row['label']} {sign}{value}{pct}")
-        state.summary_lines.append("vs baseline: " + " · ".join(bits))
+        lines.append("vs baseline: " + " · ".join(bits))
+        if baseline_delta["baseline_schema"] != SCHEMA_VERSION:
+            lines.append(
+                f"WARNING: baseline JSON is schema {baseline_delta['baseline_schema']}"
+                f", this run writes schema {SCHEMA_VERSION} — the comparison may be off."
+            )
     if missing_workers > 0:
-        state.summary_lines.append(
+        lines.append(
             f"WARNING: {missing_workers} xdist worker shard(s) missing "
             "(crashed worker or non-shared filesystem) — totals are incomplete."
         )
     if failed:
-        state.summary_lines.append(f"{failed} failing test(s) — fix those first")
+        lines.append(f"{failed} failing test(s) — fix those first")
     for todo in todos[:3]:
-        state.summary_lines.append(f"TODO [{todo['severity']}] {todo['title']}")
+        lines.append(f"TODO [{todo['severity']}] {todo['title']}")
     if html_abspath:
-        state.summary_lines.append(f"report: file://{os.path.abspath(html_abspath)}")
-    if state.json_path:
-        state.summary_lines.append(
-            f"json:   {os.path.abspath(_resolve(state.json_path, state))}"
-        )
+        lines.append(f"report: file://{os.path.abspath(html_abspath)}")
+    if json_abspath:
+        lines.append(f"json:   {os.path.abspath(json_abspath)}")
+    return lines
 
 
 def pytest_terminal_summary(

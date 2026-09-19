@@ -17,14 +17,31 @@ pytest --perf-report --perf-report-cpu-profile   # + per-function CPU breakdown
 Works unchanged under pytest-xdist: each worker records its own tests and the
 controller merges everything into one report.
 
+### Without installing
+
+The package ships a `pytest-perf-report` command that runs pytest with the
+report enabled and passes every other argument through:
+
+```bash
+uv run --with pytest-perf-report pytest-perf-report          # inside a uv project
+uvx pytest-perf-report                                        # a suite with no third-party deps
+uvx --with-requirements requirements.txt pytest-perf-report   # bring the suite's deps along
+```
+
+`uvx` runs in an isolated environment, so your project's dependencies are not
+there unless you add them; `uv run --with` layers the plugin on top of the
+project's own environment and is the right choice inside a project.
+
 ![The top of a generated report: headline numbers, the run timeline, and where the time went](docs/screenshot.png)
 
 ## What you get
 
 A single dark, dense, dependency-free HTML page:
 
-- **Headline numbers** — suite wall time, aggregate test time, CPU time,
-  median/p99 test duration, startup + collection cost, parallel efficiency.
+- **Headline numbers** — the end-to-end clock split into startup, collection,
+  session fixtures, test bodies, and orchestration; cards for aggregate test
+  time, median test, DB queries, and peak RSS; then GC, other CPU, unattributed
+  wait, HTTP, file opens, sleep, parallel efficiency, and disk IO.
 - **Startup & collection** — the startup tax decomposed into pre-pytest
   imports vs. collection; the slowest test modules to *collect* (collection
   imports the module, so module-scope work — globs, file reads, parametrize
@@ -61,11 +78,12 @@ A single dark, dense, dependency-free HTML page:
   estimated re-read volume (opens × file size, so a 5× reopen of a small JSON
   file isn't dressed up as a finding), and real disk bytes read/written
   (Linux).
-- **Tests** — failures with tracebacks, the slowest tests with a per-test
-  wall/setup/call/CPU/queries/HTTP breakdown, the fastest tests (your
-  overhead floor), and a duration histogram. Each process's first test is
-  flagged when its "slowness" is really session-scoped fixture setup being
-  charged to it.
+- **Tests** — a duration histogram, failures with tracebacks, and one sortable
+  table of every test (slowest first) with a per-test
+  wall/setup/call/CPU/queries/DB/HTTP breakdown. Parametrized cases collapse
+  into one family row that can be expanded or flattened. Each process's first
+  test is flagged when its "slowness" is really session-scoped fixture setup
+  being charged to it.
 - **Fixtures** — the costliest fixtures by total *and self* setup time (self
   excludes fixtures pulled in dynamically via `request.getfixturevalue`),
   with the DB queries and writes each fixture issues during setup, plus
